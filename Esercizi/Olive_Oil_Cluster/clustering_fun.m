@@ -1,22 +1,22 @@
-CLUSTERING
-
 % data set da analizzare:
 
-%1) Esempio con fisher iris (voi lavorerete con poi con olive oil)
+%1) Olive oil dataset
 
-load fisheriris
+% Carica dati olive oil
+olivedata = readmatrix('oliveoil.csv');
+data = normalize(olivedata);
 
 
 %% cluster nel PLS Toolbox:  prova e confronta i risultati di hierarchical agglomerative con diversi criteri di linkage 
 
 %% If PLS Toolbox is first in setpath
 % per avere informazioni :
-doc cluster
+% doc cluster
 % otherwise see PDF file in team CLusterPLSToolbox.pdf for documentation
 
 %% Hierarchical Agglomerative
 
-gcluster  % se volete usare l'interfaccia grafica
+% gcluster  % se volete usare l'interfaccia grafica
 
 % %% Per usare  command line
 % options=cluster('options');
@@ -65,15 +65,14 @@ gcluster  % se volete usare l'interfaccia grafica
 % mettere PLS Toolbox last in setpath
 clear classes
 evrimovepath('bottom');
-load fisheriris.mat
 % now the Statistical and Machine Leanring Toolbox can be used
 % Per avere informazioni
-doc clusterdata
+% doc clusterdata
 
-% esempio con data set iris autoscalato T contiene l'indice di cluster
+% esempio con data set olive oil autoscalato T contiene l'indice di cluster
 % trovato 
-load fisheriris
-data=normalize(olivdata);
+olivedata = readmatrix('oliveoil.csv');
+data=normalize(olivedata);
 T=clusterdata(data,'linkage','ward','distance','euclidean','maxclust',3);
 % maxclust indica il numero massimo di clusters che si vogliono definire,
 % in questo modo il threshold è scelto automaticamente per avere quel
@@ -94,13 +93,13 @@ T=clusterdata(data,'criterion','distance','linkage','ward','distance','euclidean
 scores=u*s;
 % fai uno scatter plot scores PC1 PC2e usa come colore indice di cluster
 figure;gscatter(scores(:,1),scores(:,2),T);
-% confronta qs plot con uno colorato con l'indice delle classi vere in
-% category
-figure;gscatter(scores(:,1),scores(:,2),category);
+title('PC1 vs PC2 colored by cluster assignment');
+xlabel('PC1'); ylabel('PC2');
 
 
 %% to do clustering on variables
-data=normalize(olivdata);
+olivedata = readmatrix('oliveoil.csv');
+data=normalize(olivedata);
 datav=data'; % matrice trasposta
 Tv=clusterdata(datav,'linkage','single','distance','correlation','maxclust',2);
 Zv=linkage(datav,'single','correlation');

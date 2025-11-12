@@ -21,9 +21,9 @@ scores = u * s;
 %% =========================================================================
 fprintf('--- PARTE 1: CLUSTERING GERARCHICO ---\n');
 
-% Liste di combinazioni da testare
-linkage_methods = {'ward', 'single', 'complete', 'average'};
-distance_methods = {'euclidean', 'cityblock', 'correlation'};
+% Liste di combinazioni da testare (COME RICHIESTO)
+linkage_methods = {'complete', 'single', 'average', 'centroid'};
+distance_methods = {'euclidean', 'mahalanobis', 'minkowski'};
 
 % Numero di cluster da cercare
 nClusters = 3;
@@ -42,11 +42,6 @@ for i = 1:length(linkage_methods)
         link_method = linkage_methods{i};
         dist_method = distance_methods{j};
         
-        % Ward funziona solo con euclidean
-        if strcmp(link_method, 'ward') && ~strcmp(dist_method, 'euclidean')
-            continue;
-        end
-        
         try
             % Calcola linkage
             Z = linkage(data, link_method, dist_method);
@@ -60,13 +55,25 @@ for i = 1:length(linkage_methods)
             
             fprintf('  %s + %s: silhouette = %.4f\n', link_method, dist_method, mean_sil);
             
-            % GRAFICO: Dendrogramma per questa combinazione
+            % GRAFICO: Dendrogramma COLORATO per questa combinazione
             figure(figNum);
-            dendrogram(Z, 0);
+            dendrogram(Z, 0, 'ColorThreshold', 'default');
             title(sprintf('Dendrogram: %s linkage + %s distance (Sil=%.3f)', ...
                 link_method, dist_method, mean_sil));
             xlabel('Sample index');
             ylabel('Distance');
+            grid on;
+            figNum = figNum + 1;
+            
+            % SCATTER PLOT: Distribuzione campioni colorati per cluster
+            figure(figNum);
+            gscatter(scores(:,1), scores(:,2), T);
+            title(sprintf('Sample Distribution: %s + %s (Sil=%.3f)', ...
+                link_method, dist_method, mean_sil));
+            xlabel('PC1');
+            ylabel('PC2');
+            legend('Location', 'best');
+            grid on;
             figNum = figNum + 1;
             
             % Salva se è il migliore
@@ -115,8 +122,8 @@ ylabel('PC2');
 legend('Location', 'best');
 grid on;
 
-fprintf('FIGURA 3: Clustering variabili + imagesc ordinata\n');
-% Clustering delle variabili (trasposta) con correlazione
+fprintf('FIGURA 3: Clustering variabili con correlazione + imagesc ordinata\n');
+% Clustering delle variabili (trasposta) con CORRELAZIONE come distanza
 datav = data';
 Zv = linkage(datav, 'average', 'correlation');
 
@@ -126,41 +133,33 @@ figure('Visible', 'off');
 close(gcf);
 var_order = permv;
 
-% Figura combinata 2x2 come richiesto dalla professoressa
+% Figura combinata con imagesc dei dati standardizzati ordinati
 figure(figNum); figNum = figNum + 1;
-set(gcf, 'Position', [100, 100, 1200, 800]);
+set(gcf, 'Position', [100, 100, 1400, 600]);
 
-% Subplot 1: vuoto (o titolo)
-subplot(2, 2, 1);
-axis off;
-text(0.5, 0.5, sprintf('Olive Oil Clustering\n%s + %s\nCutoff=%.3f\nSilhouette=%.3f', ...
-    best_linkage, best_distance, cutoff, best_silhouette), ...
-    'HorizontalAlignment', 'center', 'FontSize', 14, 'FontWeight', 'bold');
-
-% Subplot 2: Dendrogramma campioni (samples) - ORIZZONTALE IN ALTO
-subplot(2, 2, 2);
-dendrogram(best_Z, 0, 'ColorThreshold', cutoff);
-title('Sample Dendrogram');
-ylabel('Distance');
-xlabel('');
-set(gca, 'XTickLabel', []);
-
-% Subplot 3: Dendrogramma variabili (variables) - VERTICALE A SINISTRA
-subplot(2, 2, 3);
+% Subplot 1: Dendrogramma variabili (variables) - VERTICALE A SINISTRA
+subplot(1, 3, 1);
 dendrogram(Zv, 0, 'Orientation', 'left');
-title('Variable Dendrogram (correlation)');
+title('Variable Dendrogram (correlation distance)');
 xlabel('Distance');
-set(gca, 'YTickLabel', []);
+ylabel('Variables');
 
-% Subplot 4: imagesc dei dati ordinati secondo entrambi i dendrogrammi
-subplot(2, 2, 4);
+% Subplot 2: imagesc dei dati ordinati secondo entrambi i dendrogrammi
+subplot(1, 3, 2);
 imagesc(data(perm, var_order)');
 colormap('jet');
 colorbar;
-title('Standardized data (ordered by dendrograms)');
-xlabel('Samples (ordered)');
-ylabel('Variables (ordered)');
+title(sprintf('Standardized Data (ordered)\n%s + %s', best_linkage, best_distance));
+xlabel('Samples (ordered by dendrogram)');
+ylabel('Variables (ordered by correlation)');
 axis tight;
+
+% Subplot 3: Dendrogramma campioni (samples) - ORIZZONTALE
+subplot(1, 3, 3);
+dendrogram(best_Z, 0, 'ColorThreshold', cutoff, 'Orientation', 'right');
+title('Sample Dendrogram');
+ylabel('Samples');
+xlabel('Distance');
 
 %% =========================================================================
 %% PARTE 3: K-MEANS
@@ -172,10 +171,15 @@ fprintf('Eseguendo k-means con k=%d...\n', nClusters);
 sil_kmeans = mean(silhouette(data, idx_kmeans));
 fprintf('K-means silhouette = %.4f\n', sil_kmeans);
 
-fprintf('FIGURA: PC1 vs PC2 per k-means\n');
+fprintf('FIGURA: Scatter plot distribuzione campioni - K-means\n');
 figure(figNum); figNum = figNum + 1;
 gscatter(scores(:,1), scores(:,2), idx_kmeans);
-title(sprintf('PC1 vs PC2 - K-means (k=%d, Sil=%.3f)', nClusters, sil_kmeans));
+hold on;
+% Aggiungi centroidi (proiettati su PC1-PC2)
+C_pca = C * v;  % Proietta centroidi su PC space
+plot(C_pca(:,1), C_pca(:,2), 'kx', 'MarkerSize', 15, 'LineWidth', 3);
+hold off;
+title(sprintf('Sample Distribution - K-means (k=%d, Sil=%.3f)', nClusters, sil_kmeans));
 xlabel('PC1');
 ylabel('PC2');
 legend('Location', 'best');
@@ -194,6 +198,7 @@ fprintf('\n--- PARTE 4: DBSCAN ---\n');
 cls_dbscan = [];
 epsdist = NaN;
 dbscan_available = false;
+sil_dbscan_mean = NaN;
 
 try
     minpts = 5;
@@ -206,10 +211,10 @@ try
     fprintf('DBSCAN: eps automatico = %.4f, %d cluster + %d noise points\n', ...
         epsdist, n_clusters_dbscan, n_noise);
     
-    fprintf('FIGURA: PC1 vs PC2 per DBSCAN\n');
+    fprintf('FIGURA: Scatter plot distribuzione campioni - DBSCAN\n');
     figure(figNum); figNum = figNum + 1;
     gscatter(scores(:,1), scores(:,2), cls_dbscan);
-    title(sprintf('PC1 vs PC2 - DBSCAN (minpts=%d, eps=%.3f, %d clusters)', ...
+    title(sprintf('Sample Distribution - DBSCAN (minpts=%d, eps=%.3f, %d clusters)', ...
         minpts, epsdist, n_clusters_dbscan));
     xlabel('PC1');
     ylabel('PC2');
@@ -223,7 +228,8 @@ try
         valid_idx = cls_dbscan > 0;
         if sum(valid_idx) > 0
             sil_dbscan = silhouette(data(valid_idx, :), cls_dbscan(valid_idx));
-            title(sprintf('Silhouette DBSCAN (mean=%.3f, excluding noise)', mean(sil_dbscan)));
+            sil_dbscan_mean = mean(sil_dbscan);
+            title(sprintf('Silhouette DBSCAN (mean=%.3f, excluding noise)', sil_dbscan_mean));
         end
     end
     
@@ -249,36 +255,106 @@ xlabel('Sample order');
 ylabel('Reachability distance');
 grid on;
 
-%% =========================================================================
-%% PARTE 6: CONFRONTO FINALE TRA METODI
-%% =========================================================================
-fprintf('\n--- PARTE 6: CONFRONTO GERARCHICO vs K-MEANS ---\n');
-
-% FIGURA: Confronto diretto Hierarchical vs K-means
-fprintf('FIGURA: Confronto Hierarchical vs K-means (side-by-side)\n');
+% FIGURA: Scatter plot per OPTICS (colorato per ordine di reachability)
+fprintf('FIGURA: Scatter plot distribuzione campioni - OPTICS\n');
 figure(figNum); figNum = figNum + 1;
-set(gcf, 'Position', [100, 100, 1400, 500]);
-
-subplot(1, 2, 1);
-gscatter(scores(:,1), scores(:,2), best_T);
-title(sprintf('Hierarchical (%s+%s)\nSilhouette=%.3f', ...
-    best_linkage, best_distance, best_silhouette));
-xlabel('PC1'); ylabel('PC2');
-legend('Location', 'best');
+scatter(scores(:,1), scores(:,2), 50, RD, 'filled');
+colorbar;
+colormap('jet');
+title(sprintf('Sample Distribution - OPTICS (k=%d, colored by reachability)', k_optics));
+xlabel('PC1');
+ylabel('PC2');
 grid on;
 
-subplot(1, 2, 2);
-gscatter(scores(:,1), scores(:,2), idx_kmeans);
-title(sprintf('K-means (k=%d)\nSilhouette=%.3f', nClusters, sil_kmeans));
-xlabel('PC1'); ylabel('PC2');
-legend('Location', 'best');
-grid on;
+%% =========================================================================
+%% PARTE 6: CONFRONTO FINALE TRA TUTTI I METODI
+%% =========================================================================
+fprintf('\n--- PARTE 6: CONFRONTO TRA TUTTI I METODI ---\n');
 
-% FIGURA: Confronto silhouette
-fprintf('FIGURA: Confronto silhouette tra metodi\n');
+% FIGURA: Confronto scatter plots - Tutti i metodi
+fprintf('FIGURA: Confronto distribuzione campioni (tutti i metodi)\n');
 figure(figNum); figNum = figNum + 1;
 
 if dbscan_available && ~isempty(cls_dbscan)
+    set(gcf, 'Position', [100, 100, 1800, 900]);
+    
+    % Hierarchical
+    subplot(2, 2, 1);
+    gscatter(scores(:,1), scores(:,2), best_T);
+    title(sprintf('Hierarchical (%s+%s)\nSilhouette=%.3f', ...
+        best_linkage, best_distance, best_silhouette));
+    xlabel('PC1'); ylabel('PC2');
+    legend('Location', 'best');
+    grid on;
+    
+    % K-means
+    subplot(2, 2, 2);
+    gscatter(scores(:,1), scores(:,2), idx_kmeans);
+    hold on;
+    C_pca = C * v;
+    plot(C_pca(:,1), C_pca(:,2), 'kx', 'MarkerSize', 15, 'LineWidth', 3);
+    hold off;
+    title(sprintf('K-means (k=%d)\nSilhouette=%.3f', nClusters, sil_kmeans));
+    xlabel('PC1'); ylabel('PC2');
+    legend('Location', 'best');
+    grid on;
+    
+    % DBSCAN
+    subplot(2, 2, 3);
+    gscatter(scores(:,1), scores(:,2), cls_dbscan);
+    title(sprintf('DBSCAN (eps=%.3f)\n%d clusters + %d noise', ...
+        epsdist, length(unique(cls_dbscan(cls_dbscan>0))), sum(cls_dbscan==0)));
+    xlabel('PC1'); ylabel('PC2');
+    legend('Location', 'best');
+    grid on;
+    
+    % OPTICS
+    subplot(2, 2, 4);
+    scatter(scores(:,1), scores(:,2), 50, RD, 'filled');
+    colorbar;
+    colormap('jet');
+    title(sprintf('OPTICS (k=%d)\nColored by reachability', k_optics));
+    xlabel('PC1'); ylabel('PC2');
+    grid on;
+else
+    set(gcf, 'Position', [100, 100, 1800, 600]);
+    
+    % Hierarchical
+    subplot(1, 3, 1);
+    gscatter(scores(:,1), scores(:,2), best_T);
+    title(sprintf('Hierarchical (%s+%s)\nSilhouette=%.3f', ...
+        best_linkage, best_distance, best_silhouette));
+    xlabel('PC1'); ylabel('PC2');
+    legend('Location', 'best');
+    grid on;
+    
+    % K-means
+    subplot(1, 3, 2);
+    gscatter(scores(:,1), scores(:,2), idx_kmeans);
+    hold on;
+    C_pca = C * v;
+    plot(C_pca(:,1), C_pca(:,2), 'kx', 'MarkerSize', 15, 'LineWidth', 3);
+    hold off;
+    title(sprintf('K-means (k=%d)\nSilhouette=%.3f', nClusters, sil_kmeans));
+    xlabel('PC1'); ylabel('PC2');
+    legend('Location', 'best');
+    grid on;
+    
+    % OPTICS
+    subplot(1, 3, 3);
+    scatter(scores(:,1), scores(:,2), 50, RD, 'filled');
+    colorbar;
+    colormap('jet');
+    title(sprintf('OPTICS (k=%d)\nColored by reachability', k_optics));
+    xlabel('PC1'); ylabel('PC2');
+    grid on;
+end
+
+% FIGURA: Confronto silhouette (solo metodi applicabili)
+fprintf('FIGURA: Confronto silhouette scores\n');
+figure(figNum); figNum = figNum + 1;
+
+if dbscan_available && ~isempty(cls_dbscan) && ~isnan(sil_dbscan_mean)
     set(gcf, 'Position', [100, 100, 1400, 500]);
     
     subplot(1, 3, 1);
@@ -292,8 +368,8 @@ if dbscan_available && ~isempty(cls_dbscan)
     subplot(1, 3, 3);
     valid_idx = cls_dbscan > 0;
     if sum(valid_idx) > 0
-        sil_db = silhouette(data(valid_idx, :), cls_dbscan(valid_idx));
-        title(sprintf('DBSCAN\n(no noise)\nMean=%.3f', mean(sil_db)));
+        silhouette(data(valid_idx, :), cls_dbscan(valid_idx));
+        title(sprintf('DBSCAN\n(no noise)\nMean=%.3f', sil_dbscan_mean));
     end
 else
     set(gcf, 'Position', [100, 100, 1000, 500]);
@@ -328,14 +404,13 @@ fprintf('   Differenza vs Hierarchical: %.4f\n', abs(sil_kmeans - best_silhouett
 
 if dbscan_available && ~isempty(cls_dbscan)
     valid_idx = cls_dbscan > 0;
-    if sum(valid_idx) > 0
-        sil_db = mean(silhouette(data(valid_idx, :), cls_dbscan(valid_idx)));
+    if sum(valid_idx) > 0 && ~isnan(sil_dbscan_mean)
         fprintf('\n3. DBSCAN:\n');
         fprintf('   minpts: %d\n', minpts);
         fprintf('   eps: %.4f\n', epsdist);
         fprintf('   Cluster trovati: %d\n', length(unique(cls_dbscan(cls_dbscan>0))));
-        fprintf('   Noise points: %d\n', sum(cls_dbscan == 0));
-        fprintf('   Silhouette medio (no noise): %.4f\n', sil_db);
+        fprintf('   Noise points: %d (%.1f%%)\n', sum(cls_dbscan == 0), 100*sum(cls_dbscan==0)/nSamples);
+        fprintf('   Silhouette medio (no noise): %.4f\n', sil_dbscan_mean);
     end
 end
 
@@ -344,12 +419,35 @@ fprintf('   k parameter: %d\n', k_optics);
 fprintf('   (Vedi reachability plot per identificare cluster)\n');
 
 fprintf('\n========================================\n');
-fprintf('CONCLUSIONE CONFRONTO:\n');
-if sil_kmeans > best_silhouette
-    fprintf('>>> K-means ha performance MIGLIORE (Δsil = +%.4f)\n', sil_kmeans - best_silhouette);
-else
-    fprintf('>>> Hierarchical ha performance MIGLIORE (Δsil = +%.4f)\n', best_silhouette - sil_kmeans);
+fprintf('CONFRONTO EFFICIENZA CLUSTERING:\n');
+fprintf('========================================\n');
+
+% Trova il metodo migliore
+methods = {'Hierarchical', 'K-means'};
+scores_list = [best_silhouette, sil_kmeans];
+
+if dbscan_available && ~isnan(sil_dbscan_mean)
+    methods{end+1} = 'DBSCAN';
+    scores_list(end+1) = sil_dbscan_mean;
 end
+
+[best_score, best_idx] = max(scores_list);
+fprintf('METODO MIGLIORE: %s (Silhouette = %.4f)\n', methods{best_idx}, best_score);
+
+fprintf('\nRanking per Silhouette Score:\n');
+[sorted_scores, sort_idx] = sort(scores_list, 'descend');
+for i = 1:length(sorted_scores)
+    fprintf('  %d. %s: %.4f\n', i, methods{sort_idx(i)}, sorted_scores(i));
+end
+
+fprintf('\nValutazione distribuzione cluster:\n');
+fprintf('  - Hierarchical: Vedi scatter plot per separazione cluster\n');
+fprintf('  - K-means: I centroidi mostrano i punti centrali di ogni cluster\n');
+if dbscan_available
+    fprintf('  - DBSCAN: Identifica automaticamente cluster di densità variabile\n');
+end
+fprintf('  - OPTICS: Usa reachability distance per struttura gerarchica di densità\n');
+
 fprintf('========================================\n');
 
 fprintf('\nTotale figure generate: %d\n', figNum - 1);

@@ -1,22 +1,21 @@
+
 % data set da analizzare:
 
-%1) Olive oil dataset
+%1) Adattato per Olive Oil dataset (originariamente per Fisher Iris)
 
-% Carica dati olive oil
-olivedata = readmatrix('oliveoil.csv');
-data = normalize(olivedata);
-
+load oliveoil.mat
+% oliveoil.mat contiene la variabile 'olivdata' con i dati numerici
+fprintf('Caricato oliveoil.mat - variabile: olivdata\n');
 
 %% cluster nel PLS Toolbox:  prova e confronta i risultati di hierarchical agglomerative con diversi criteri di linkage 
 
 %% If PLS Toolbox is first in setpath
 % per avere informazioni :
-% doc cluster
 % otherwise see PDF file in team CLusterPLSToolbox.pdf for documentation
 
 %% Hierarchical Agglomerative
 
-% gcluster  % se volete usare l'interfaccia grafica
+%gcluster  % se volete usare l'interfaccia grafica
 
 % %% Per usare  command line
 % options=cluster('options');
@@ -62,73 +61,234 @@ data = normalize(olivedata);
 
 
 %% CLustering con il Machine Learning Toolbox
-% mettere PLS Toolbox last in setpath
-clear classes
-evrimovepath('bottom');
-% now the Statistical and Machine Leanring Toolbox can be used
-% Per avere informazioni
-% doc clusterdata
+% IMPORTANTE: Rimuovi PLS Toolbox dal path per evitare conflitti
+warning('off', 'all'); % Disabilita warning temporaneamente
 
-% esempio con data set olive oil autoscalato T contiene l'indice di cluster
-% trovato 
-olivedata = readmatrix('oliveoil.csv');
-data=normalize(olivedata);
-T=clusterdata(data,'linkage','ward','distance','euclidean','maxclust',3);
-% maxclust indica il numero massimo di clusters che si vogliono definire,
-% in questo modo il threshold è scelto automaticamente per avere quel
-% numero di clusters. Altrimenti si può usare un valore di threshold
-% desiderato scelto in base al dendrogramma
-% to obtain the dendogram
-Z=linkage(data,'ward');
-dendrogram(Z,0) % mette tutti i campioni
-% dendrogram(Z,100)  %mette solo 100 nodi
-cutoff=9.7; % scegliere in base al dendrogramma
-dendrogram(Z,0,'ColorThreshold',cutoff);
-T=clusterdata(data,'criterion','distance','linkage','ward','distance','euclidean','Cutoff',cutoff);
+% Rimuovi PLS Toolbox dal path se presente (evita conflitto con cluster())
+try
+    evrimovepath('bottom'); % Sposta PLS Toolbox in fondo al path
+catch
+    % PLS Toolbox non presente, ok
+end
+
+% Usa i dati già caricati da oliveoil.mat
+% NOTA: olivdata è già una matrice numerica, non serve readtable
+data = normalize(olivdata); % autoscaling (zscore normalization)
+[nSamples, nVars] = size(data);
+fprintf('Dataset normalizzato: %d campioni x %d variabili\n', nSamples, nVars);
+
+%% =========================================================================
+%% CLUSTERING ITERATIVO: Testa tutte le combinazioni linkage/distanza
+%% =========================================================================
+
+fprintf('\n=== CLUSTERING GERARCHICO ITERATIVO ===\n');
+
+% Liste di metodi da testare
+linkage_methods = {'ward', 'single', 'complete', 'average', 'centroid'};
+distance_methods = {'euclidean', 'cityblock', 'correlation', 'cosine'};
+
+% Numero di cluster desiderato
+nClusters = 3;
+
+% Struttura per salvare risultati
+results = struct();
+result_idx = 1;
+
+fprintf('Testando combinazioni linkage × distanza:\n');
+fprintf('%-12s %-12s %-12s %s\n', 'Linkage', 'Distanza', 'Silhouette', 'Note');
+fprintf('%s\n', repmat('-', 60, 1));
+
+figNum = 1;
+
+for i = 1:length(linkage_methods)
+    for j = 1:length(distance_methods)
+        link_method = linkage_methods{i};
+        dist_method = distance_methods{j};
+        
+        % Ward funziona solo con euclidean
+        if strcmp(link_method, 'ward') && ~strcmp(dist_method, 'euclidean')
+            fprintf('%-12s %-12s %-12s %s\n', link_method, dist_method, 'N/A', 'Ward richiede euclidean');
+            continue;
+        end
+        
+        try
+            % Calcola linkage
+            Z = linkage(data, link_method, dist_method);
+            
+            % Estrai cluster
+            T = cluster(Z, 'maxclust', nClusters);
+            
+            % Calcola silhouette
+            sil_vals = silhouette(data, T);
+            mean_sil = mean(sil_vals);
+            
+            % Salva risultati
+            results(result_idx).linkage = link_method;
+            results(result_idx).distance = dist_method;
+            results(result_idx).silhouette = mean_sil;
+            results(result_idx).Z = Z;
+            results(result_idx).T = T;
+            results(result_idx).sil_vals = sil_vals;
+            
+            fprintf('%-12s %-12s %-12.4f %s\n', link_method, dist_method, mean_sil, '✓');
+            
+            % Genera dendrogramma per questa combinazione
+            figure(figNum);
+            dendrogram(Z, 0, 'ColorThreshold', 'default');
+            title(sprintf('Dendrogram: %s + %s (Silhouette=%.3f)', ...
+                link_method, dist_method, mean_sil));
+            xlabel('Sample index');
+            ylabel('Distance');
+            grid on;
+            figNum = figNum + 1;
+            
+            result_idx = result_idx + 1;
+            
+        catch ME
+            fprintf('%-12s %-12s %-12s %s\n', link_method, dist_method, 'ERRORE', ME.message);
+        end
+    end
+end
+
+% Ordina per silhouette (migliore → peggiore)
+[~, sort_idx] = sort([results.silhouette], 'descend');
+results = results(sort_idx);
+
+fprintf('\n%s\n', repmat('=', 60, 1));
+fprintf('RANKING PER SILHOUETTE SCORE:\n');
+fprintf('%s\n', repmat('=', 60, 1));
+for i = 1:min(5, length(results))
+    fprintf('%d. %s + %s: %.4f\n', i, ...
+        results(i).linkage, results(i).distance, results(i).silhouette);
+end
+
+%% =========================================================================
+%% ANALISI DETTAGLIATA DEI 2 MIGLIORI METODI
+%% =========================================================================
+
+fprintf('\n=== ANALISI DETTAGLIATA TOP 2 METODI ===\n');
+
+for top_idx = 1:min(2, length(results))
+    fprintf('\n--- METODO #%d: %s + %s (Silhouette=%.4f) ---\n', ...
+        top_idx, results(top_idx).linkage, results(top_idx).distance, ...
+        results(top_idx).silhouette);
+    
+    % Recupera dati
+    Z = results(top_idx).Z;
+    T = results(top_idx).T;
+    link_method = results(top_idx).linkage;
+    dist_method = results(top_idx).distance;
+    mean_sil = results(top_idx).silhouette;
+    
+    % Calcola cutoff per nClusters
+    cutoff_idx = size(Z, 1) - nClusters + 2;
+    cutoff = Z(cutoff_idx, 3);
+    
+    % FIGURA 1: Dendrogramma con cutoff evidenziato
+    figure(figNum); figNum = figNum + 1;
+    dendrogram(Z, 0, 'ColorThreshold', cutoff);
+    title(sprintf('Metodo #%d: %s + %s (cutoff=%.3f, Sil=%.3f)', ...
+        top_idx, link_method, dist_method, cutoff, mean_sil));
+    xlabel('Sample index');
+    ylabel('Distance');
+    grid on;
 
 
-%% to see the effect of clustering
-% fai PCA del data set con 2 PCs
-[u s v]=svds(data,2);
-scores=u*s;
-% fai uno scatter plot scores PC1 PC2e usa come colore indice di cluster
-figure;gscatter(scores(:,1),scores(:,2),T);
-title('PC1 vs PC2 colored by cluster assignment');
-xlabel('PC1'); ylabel('PC2');
+    % FIGURA 2: Scatter PC1 vs PC2 colorato per cluster
+    [u s v]=svds(data,2);
+    scores=u*s;
+    var_explained = diag(s).^2 / sum(diag(s).^2) * 100;
+    
+    figure(figNum); figNum = figNum + 1;
+    gscatter(scores(:,1),scores(:,2),T);
+    title(sprintf('Metodo #%d: %s + %s - PC1 vs PC2 (Sil=%.3f)', ...
+        top_idx, link_method, dist_method, mean_sil));
+    xlabel(sprintf('PC1 (%.1f%% variance)', var_explained(1)));
+    ylabel(sprintf('PC2 (%.1f%% variance)', var_explained(2)));
+    legend('Location', 'best');
+    grid on;
+    
+    % FIGURA 3: Silhouette plot
+    figure(figNum); figNum = figNum + 1;
+    silhouette(data, T);
+    title(sprintf('Metodo #%d: Silhouette plot (mean=%.3f)', top_idx, mean_sil));
+end
+
+%% =========================================================================
+%% CLUSTERING VARIABILI (per il miglior metodo)
+%% =========================================================================
+
+fprintf('\n=== CLUSTERING VARIABILI (metodo migliore) ===\n');
 
 
-%% to do clustering on variables
-olivedata = readmatrix('oliveoil.csv');
-data=normalize(olivedata);
-datav=data'; % matrice trasposta
-Tv=clusterdata(datav,'linkage','single','distance','correlation','maxclust',2);
-Zv=linkage(datav,'single','correlation');
-cutoff=0.1;
-figure; dendrogram(Zv,0,'ColorThreshold', cutoff); %variabili
-% ottieni l'ordine delle vfigure; 
+% Usa il MIGLIOR metodo per clustering variabili
+best_result = results(1);
+Z_best = best_result.Z;
+T_best = best_result.T;
+link_best = best_result.linkage;
+dist_best = best_result.distance;
+sil_best = best_result.silhouette;
+
+% Calcola cutoff per il miglior metodo
+cutoff_best = Z_best(size(Z_best,1) - nClusters + 2, 3);
+
+% Clustering delle variabili con correlation
+datav=data'; % matrice trasposta (ora le variabili sono le righe)
+Zv=linkage(datav,'average','correlation');
+Tv = cluster(Zv,'maxclust',2);
+
+figure(figNum); figNum = figNum + 1;
+dendrogram(Zv,0,'ColorThreshold', 'default');
+title('Dendrogramma Variabili (correlation distance)');
+xlabel('Variable index');
+ylabel('Correlation distance');
+grid on;
+
+% ottieni l'ordine delle variabili dal dendrogramma
 av=gca;
 labelv=str2num(av.XTickLabel);
 ordvar=labelv(end:-1:1);
-% fai il plot con cluster campioni, cluster variabili e matrice ordinata
-figure; subplot(2,2,2); dendrogram(Z,0,'ColorThreshold',cutoff);
-ao=gca;
-label_o=str2num(ao.XTickLabel);
-hold on;subplot(2,2,3);dendrogram(Zv,0,'orientation','left');
-hold on;subplot(2,2,4);imagesc(data(label_o,ordvar)'); 
+
+%% FIGURA COMBINATA 2x2 (miglior metodo)
+fprintf('Generando figura combinata 2x2...\n');
+
+% Ottieni ordine campioni dal dendrogramma migliore
+figure('Visible', 'off');
+dendrogram(Z_best, 0);
+ao = gca;
+label_o = str2num(ao.XTickLabel);
+close(gcf);
+
+% Figura finale 2x2
+figure(figNum); figNum = figNum + 1;
+set(gcf, 'Position', [100, 100, 1200, 800]);
+
+subplot(2,2,1);
+axis off;
+text(0.5, 0.5, sprintf('Olive Oil Clustering\nMIGLIORE: %s + %s\nSilhouette=%.3f\n%d samples x %d vars', ...
+    link_best, dist_best, sil_best, nSamples, nVars), ...
+    'HorizontalAlignment', 'center', 'FontSize', 12, 'FontWeight', 'bold');
+
+subplot(2,2,2); 
+dendrogram(Z_best,0,'ColorThreshold',cutoff_best);
+title(sprintf('Sample Dendrogram (%s+%s)', link_best, dist_best));
+ylabel('Distance');
+
+subplot(2,2,3);
+dendrogram(Zv,0,'orientation','left');
+title('Variable Dendrogram (correlation)');
+xlabel('Distance');
+
+subplot(2,2,4);
+imagesc(data(label_o,ordvar)'); 
+colormap('jet');
+colorbar;
+title('Heatmap (ordered by dendrograms)');
+xlabel('Samples (ordered)');
+ylabel('Variables (ordered)');
 ai=gca;
 ai.YTickLabel=ordvar;
-colormap('jet');
-% per mettere i numeri dei campioni nell'ordine del cluster
-% (se sono molti non si leggono)
-ai.XTickMode='manual';
-ai.XTick=[1:size(data,1)];
-ai.XTickLabel=label_o;
-ai.XTickLabelRotation=90;
 
-
-
-
-
-
-
-
+fprintf('\n=== ANALISI GERARCHICA COMPLETATA ===\n');
+fprintf('Totale figure generate: %d\n', figNum-1);
+fprintf('Miglior metodo: %s + %s (Silhouette=%.4f)\n\n', link_best, dist_best, sil_best);

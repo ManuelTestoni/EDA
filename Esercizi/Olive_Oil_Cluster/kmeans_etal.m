@@ -7,7 +7,12 @@ data=normalize(olivdata); % autoscaling
 [nSamples, nVars] = size(data);
 fprintf('Dataset: %d campioni x %d variabili\n', nSamples, nVars);
 
-[idx,C] = kmeans(data,3);  % cerco 3 cluster
+% NOTA: Il dataset Olive Oil ha 8 categorie naturali (varietà di olio)
+% Puoi testare con k=3 (macro-gruppi) o k=8 (categorie reali)
+k_clusters = 8;  % Cambia questo valore: 3, 5, 8, etc.
+fprintf('K-means con k=%d cluster\n', k_clusters);
+
+[idx,C] = kmeans(data, k_clusters, 'Replicates', 10);  % cerco k cluster
 % in idx c'è l'indice di cluster
 % in C cisono le coordinate dei centroidi dei cluster rispetto alle
 % variabili originali
@@ -20,9 +25,11 @@ scores=u*s;
 % fai uno scatter plot scores PC1 PC2 e usa come colore indice di cluster
 figure;
 gscatter(scores(:,1),scores(:,2),idx);
-title('K-means Clustering - PC1 vs PC2');
+title(sprintf('K-means Clustering - PC1 vs PC2 (k=%d)', k_clusters));
 xlabel('PC1'); ylabel('PC2');
-legend('Location', 'best');
+if k_clusters <= 10
+    legend('Location', 'best');  % Solo se non troppi cluster
+end
 grid on;
 
 % NOTA: Olive Oil dataset non ha etichette di categoria (a differenza di Iris)

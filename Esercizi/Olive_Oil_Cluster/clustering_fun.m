@@ -61,19 +61,18 @@ fprintf('Caricato oliveoil.mat - variabile: olivdata\n');
 
 
 %% CLustering con il Machine Learning Toolbox
-% IMPORTANTE: Rimuovi PLS Toolbox dal path per evitare conflitti
-warning('off', 'all'); % Disabilita warning temporaneamente
+% IMPORTANTE: Gestisci conflitto PLS Toolbox
+warning('off', 'all');
 
-% Rimuovi PLS Toolbox dal path se presente (evita conflitto con cluster())
+% Sposta PLS Toolbox in fondo al path per evitare conflitti
 try
-    evrimovepath('bottom'); % Sposta PLS Toolbox in fondo al path
+    evrimovepath('bottom');
 catch
-    % PLS Toolbox non presente, ok
+    % PLS Toolbox non presente
 end
 
 % Usa i dati già caricati da oliveoil.mat
-% NOTA: olivdata è già una matrice numerica, non serve readtable
-data = normalize(olivdata); % autoscaling (zscore normalization)
+data = normalize(olivdata);
 [nSamples, nVars] = size(data);
 fprintf('Dataset normalizzato: %d campioni x %d variabili\n', nSamples, nVars);
 
@@ -88,10 +87,11 @@ linkage_methods = {'ward', 'single', 'complete', 'average', 'centroid'};
 distance_methods = {'euclidean', 'cityblock', 'correlation', 'cosine'};
 
 % Numero di cluster desiderato
-nClusters = 3;
+nClusters = 8;
+fprintf('Numero cluster cercati: %d\n', nClusters);
 
-% Struttura per salvare risultati
-results = struct();
+% Struttura per salvare risultati - inizializza con campi per evitare errori
+results = struct('linkage', {}, 'distance', {}, 'silhouette', {}, 'Z', {}, 'T', {}, 'sil_vals', {});
 result_idx = 1;
 
 fprintf('Testando combinazioni linkage × distanza:\n');
@@ -112,11 +112,19 @@ for i = 1:length(linkage_methods)
         end
         
         try
-            % Calcola linkage
-            Z = linkage(data, link_method, dist_method);
+            % Usa pdist + linkage per evitare conflitti con PLS Toolbox
+            if strcmp(link_method, 'ward')
+                % Ward usa solo euclidean e richiede pdist
+                Y = pdist(data, 'euclidean');
+                Z = linkage(Y, 'ward');
+            else
+                % Altri metodi: usa pdist con distanza specifica
+                Y = pdist(data, dist_method);
+                Z = linkage(Y, link_method);
+            end
             
-            % Estrai cluster
-            T = cluster(Z, 'maxclust', nClusters);
+            % Estrai cluster usando clusterdata per evitare conflitti
+            T = clusterdata(data, 'linkage', link_method, 'distance', dist_method, 'maxclust', nClusters);
             
             % Calcola silhouette
             sil_vals = silhouette(data, T);
@@ -150,7 +158,10 @@ for i = 1:length(linkage_methods)
     end
 end
 
-% Ordina per silhouette (migliore → peggiore)
+% Ordina per silhouette (migliore → peggiore) - verifica che ci siano risultati
+if isempty(results) || length(results) == 0
+    error('ERRORE CRITICO: Nessun metodo di clustering è riuscito. Verifica l''installazione del Statistics Toolbox.');
+end
 [~, sort_idx] = sort([results.silhouette], 'descend');
 results = results(sort_idx);
 

@@ -139,17 +139,18 @@ hold off;
 
 %% DEFINIZIONE PREPROCESSING DA TESTARE
 % Usa le funzioni del PLS_Toolbox quando possibile
+% NOTA: Per ridurre il rumore nelle derivate, usiamo finestre ampie (21, 31)
+% come suggerito. Savitzky-Golay fa già smoothing intrinseco.
 preprocessing_list = {
     'none', 'Nessun preprocessing (solo mean center)';
     'baseline', 'Baseline correction (detrend)';
     'snv', 'Standard Normal Variate (SNV)';
     'msc', 'Multiplicative Scatter Correction (MSC)';
     'normalize', 'Normalizzazione (norma unitaria)';
-    'savgol1_w11', '1a Derivata (Savitzky-Golay, w=11, ord=2)';
-    'savgol2_w11', '2a Derivata (Savitzky-Golay, w=11, ord=2)';
-    'savgol1_w15', '1a Derivata (Savitzky-Golay, w=15, ord=3)';
-    'savgol2_w15', '2a Derivata (Savitzky-Golay, w=15, ord=3)';
     'savgol1_w21', '1a Derivata (Savitzky-Golay, w=21, ord=3)';
+    'savgol2_w21', '2a Derivata (Savitzky-Golay, w=21, ord=3)';
+    'savgol1_w31', '1a Derivata (Savitzky-Golay, w=31, ord=3)';
+    'savgol2_w31', '2a Derivata (Savitzky-Golay, w=31, ord=3)';
 };
 
 n_preprocessing = size(preprocessing_list, 1);
@@ -225,45 +226,38 @@ for p = 1:n_preprocessing
                     X_prep = X_prep ./ sqrt(sum(X_prep.^2, 2));
                 end
                 
-            case 'savgol1_w11'
-                % 1a Derivata con Savitzky-Golay (finestra=11, ordine=2)
-                try
-                    X_prep = savgol(X, 1, 11, 2); % PLS_Toolbox
-                catch
-                    % Fallback a sgolayfilt
-                    X_prep = sgolayfilt(X', 2, 11, [], 1)';
-                end
-                
-            case 'savgol2_w11'
-                % 2a Derivata con Savitzky-Golay (finestra=11, ordine=2)
-                try
-                    X_prep = savgol(X, 2, 11, 2); % PLS_Toolbox
-                catch
-                    X_prep = sgolayfilt(X', 2, 11, [], 2)';
-                end
-                
-            case 'savgol1_w15'
-                % 1a Derivata con Savitzky-Golay (finestra=15, ordine=3)
-                try
-                    X_prep = savgol(X, 1, 15, 3);
-                catch
-                    X_prep = sgolayfilt(X', 3, 15, [], 1)';
-                end
-                
-            case 'savgol2_w15'
-                % 2a Derivata con Savitzky-Golay (finestra=15, ordine=3)
-                try
-                    X_prep = savgol(X, 2, 15, 3);
-                catch
-                    X_prep = sgolayfilt(X', 3, 15, [], 2)';
-                end
-                
             case 'savgol1_w21'
                 % 1a Derivata con Savitzky-Golay (finestra=21, ordine=3)
                 try
                     X_prep = savgol(X, 1, 21, 3);
                 catch
                     X_prep = sgolayfilt(X', 3, 21, [], 1)';
+                end
+                
+            case 'savgol2_w21'
+                % 2a Derivata con Savitzky-Golay (finestra=21, ordine=3)
+                try
+                    X_prep = savgol(X, 2, 21, 3);
+                catch
+                    X_prep = sgolayfilt(X', 3, 21, [], 2)';
+                end
+                
+            case 'savgol1_w31'
+                % 1a Derivata con Savitzky-Golay (finestra=31, ordine=3)
+                % Finestra ampia per massimo smoothing e riduzione del rumore
+                try
+                    X_prep = savgol(X, 1, 31, 3);
+                catch
+                    X_prep = sgolayfilt(X', 3, 31, [], 1)';
+                end
+                
+            case 'savgol2_w31'
+                % 2a Derivata con Savitzky-Golay (finestra=31, ordine=3)
+                % Finestra ampia per massimo smoothing e riduzione del rumore
+                try
+                    X_prep = savgol(X, 2, 31, 3);
+                catch
+                    X_prep = sgolayfilt(X', 3, 31, [], 2)';
                 end
         end
         
@@ -274,41 +268,6 @@ for p = 1:n_preprocessing
     
     % Applica SEMPRE mean centering alla fine
     X_prep = X_prep - mean(X_prep, 1);
-    
-    %% PLOT SPETTRI PREPROCESSATI
-    fig = figure('Name', ['Preprocessing: ' prep_name], 'Position', [100 100 1400 900]);
-    
-    % Subplot 1: Tutti gli spettri preprocessati
-    subplot(2,2,1);
-    hold on;
-    legend_handles = [];
-    for i = 1:length(unique_cats)
-        idx = strcmp(categories, unique_cats{i});
-        h = plot(wavelengths, X_prep(idx, :)', 'Color', colors_rgb(i,:), 'LineWidth', 0.5);
-        legend_handles(i) = h(1);
-    end
-    xlabel('Lunghezza d''onda (nm)');
-    ylabel('Assorbanza preprocessata');
-    title(['Spettri dopo ' prep_name]);
-    legend(legend_handles, unique_cats, 'Location', 'best');
-    grid on;
-    hold off;
-    
-    % Subplot 2: Spettri medi per categoria
-    subplot(2,2,2);
-    hold on;
-    legend_handles = [];
-    for i = 1:length(unique_cats)
-        idx = strcmp(categories, unique_cats{i});
-        mean_spectrum = mean(X_prep(idx, :), 1);
-        legend_handles(i) = plot(wavelengths, mean_spectrum, 'Color', colors_rgb(i,:), 'LineWidth', 2);
-    end
-    xlabel('Lunghezza d''onda (nm)');
-    ylabel('Assorbanza preprocessata');
-    title('Spettri Medi per Categoria');
-    legend(legend_handles, unique_cats, 'Location', 'best');
-    grid on;
-    hold off;
     
     %% PCA con PLS_Toolbox
     % Il PLS_Toolbox ha una sintassi diversa: pca(X, ncomp, options)
@@ -526,9 +485,7 @@ for p = 1:n_preprocessing
     fprintf('Varianza spiegata da PC2: %.2f%%\n', explained(2));
     fprintf('Varianza spiegata da PC1+PC2: %.2f%%\n', sum(explained(1:2)));
     fprintf('Varianza spiegata da PC1+PC2+PC3: %.2f%%\n', sum(explained(1:3)));
-    
-    %% SCORE PLOT (PC1 vs PC2)
-    subplot(2,2,3);
+    fprintf('\n');
     
     % Verifica dimensioni prima di gscatter
     if size(scores, 1) ~= length(categories)
@@ -635,22 +592,25 @@ end
 
 %% TROVA I MIGLIORI PREPROCESSING
 [~, sorted_idx] = sort(arrayfun(@(x) sum(x.explained(1:2)), results), 'descend');
-best_idx = sorted_idx(1:min(2, length(sorted_idx)));
 
 fprintf('\n========================================\n');
-fprintf('MIGLIORI PREPROCESSING\n');
+fprintf('RANKING PREPROCESSING (per varianza PC1+PC2)\n');
 fprintf('========================================\n\n');
 
-for i = 1:length(best_idx)
-    fprintf('%d. %s\n', i, results(best_idx(i)).prep_name);
-    fprintf('   Varianza PC1+PC2: %.2f%%\n', sum(results(best_idx(i)).explained(1:2)));
-    fprintf('   Varianza PC1: %.2f%%\n', results(best_idx(i)).explained(1));
-    fprintf('   Varianza PC2: %.2f%%\n\n', results(best_idx(i)).explained(2));
+for i = 1:length(sorted_idx)
+    fprintf('%d. %s\n', i, results(sorted_idx(i)).prep_name);
+    fprintf('   Varianza PC1+PC2: %.2f%%\n', sum(results(sorted_idx(i)).explained(1:2)));
+    fprintf('   Varianza PC1: %.2f%%\n', results(sorted_idx(i)).explained(1));
+    fprintf('   Varianza PC2: %.2f%%\n\n', results(sorted_idx(i)).explained(2));
 end
 
-%% ANALISI DETTAGLIATA DEI MIGLIORI PREPROCESSING
-for i = 1:length(best_idx)
-    idx = best_idx(i);
+%% ANALISI DETTAGLIATA PER TUTTI I PREPROCESSING
+fprintf('\n========================================\n');
+fprintf('GENERAZIONE ANALISI DETTAGLIATE\n');
+fprintf('========================================\n\n');
+
+for i = 1:n_preprocessing
+    idx = i;
     
     fprintf('\n========================================\n');
     fprintf('ANALISI DETTAGLIATA: %s\n', results(idx).prep_name);

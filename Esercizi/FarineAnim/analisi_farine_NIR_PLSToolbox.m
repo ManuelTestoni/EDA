@@ -147,8 +147,6 @@ preprocessing_list = {
     'snv', 'Standard Normal Variate (SNV)';
     'msc', 'Multiplicative Scatter Correction (MSC)';
     'normalize', 'Normalizzazione (norma unitaria)';
-    'savgol1_w21', '1a Derivata (Savitzky-Golay, w=21, ord=3)';
-    'savgol2_w21', '2a Derivata (Savitzky-Golay, w=21, ord=3)';
     'savgol1_w31', '1a Derivata (Savitzky-Golay, w=31, ord=3)';
     'savgol2_w31', '2a Derivata (Savitzky-Golay, w=31, ord=3)';
 };
@@ -226,39 +224,51 @@ for p = 1:n_preprocessing
                     X_prep = X_prep ./ sqrt(sum(X_prep.^2, 2));
                 end
                 
-            case 'savgol1_w21'
-                % 1a Derivata con Savitzky-Golay (finestra=21, ordine=3)
-                try
-                    X_prep = savgol(X, 1, 21, 3);
-                catch
-                    X_prep = sgolayfilt(X', 3, 21, [], 1)';
-                end
-                
-            case 'savgol2_w21'
-                % 2a Derivata con Savitzky-Golay (finestra=21, ordine=3)
-                try
-                    X_prep = savgol(X, 2, 21, 3);
-                catch
-                    X_prep = sgolayfilt(X', 3, 21, [], 2)';
-                end
-                
             case 'savgol1_w31'
                 % 1a Derivata con Savitzky-Golay (finestra=31, ordine=3)
                 % Finestra ampia per massimo smoothing e riduzione del rumore
-                try
-                    X_prep = savgol(X, 1, 31, 3);
-                catch
-                    X_prep = sgolayfilt(X', 3, 31, [], 1)';
-                end
+                fprintf('  Applicando 1a derivata (w=31, ord=3)...\n');
+                fprintf('  Dimensioni X originale: %d x %d\n', size(X,1), size(X,2));
+                
+                % USA SEMPRE sgolayfilt di MATLAB (più affidabile)
+                % sgolayfilt(X, order, framelen, weights, deriv)
+                % X deve essere trasposta per operare sulle righe
+                X_prep = sgolayfilt(X', 3, 31, [], 1)';
+                
+                fprintf('  Dimensioni dopo 1a derivata: %d x %d\n', size(X_prep,1), size(X_prep,2));
+                
+                % DIAGNOSTICA: Verifica che sia effettivamente una derivata
+                fprintf('  Range dati originali: [%.4f, %.4f]\n', min(X(:)), max(X(:)));
+                fprintf('  Range dopo 1a derivata: [%.4f, %.4f]\n', min(X_prep(:)), max(X_prep(:)));
+                fprintf('  Media assoluta 1a deriv: %.6f\n', mean(abs(X_prep(:))));
+                
+                % Test: controlla alcuni valori per vedere se sono diversi
+                fprintf('  Primi 3 valori spettro 1 originale: %.4f, %.4f, %.4f\n', X(1,1), X(1,2), X(1,3));
+                fprintf('  Primi 3 valori spettro 1 derivata: %.4f, %.4f, %.4f\n', X_prep(1,1), X_prep(1,2), X_prep(1,3));
                 
             case 'savgol2_w31'
                 % 2a Derivata con Savitzky-Golay (finestra=31, ordine=3)
                 % Finestra ampia per massimo smoothing e riduzione del rumore
-                try
-                    X_prep = savgol(X, 2, 31, 3);
-                catch
-                    X_prep = sgolayfilt(X', 3, 31, [], 2)';
-                end
+                fprintf('  Applicando 2a derivata (w=31, ord=3)...\n');
+                fprintf('  Dimensioni X originale: %d x %d\n', size(X,1), size(X,2));
+                
+                % USA SEMPRE sgolayfilt di MATLAB (più affidabile)
+                % L'ultimo parametro (2) specifica la seconda derivata
+                X_prep = sgolayfilt(X', 3, 31, [], 2)';
+                
+                fprintf('  Dimensioni dopo 2a derivata: %d x %d\n', size(X_prep,1), size(X_prep,2));
+                
+                % DIAGNOSTICA: Verifica che sia effettivamente una derivata seconda
+                fprintf('  Range dati originali: [%.4f, %.4f]\n', min(X(:)), max(X(:)));
+                fprintf('  Range dopo 2a derivata: [%.4f, %.4f]\n', min(X_prep(:)), max(X_prep(:)));
+                fprintf('  Media assoluta 2a deriv: %.6f\n', mean(abs(X_prep(:))));
+                
+                % Test: controlla alcuni valori per vedere se sono diversi dalla 1a
+                fprintf('  Primi 3 valori spettro 1 originale: %.4f, %.4f, %.4f\n', X(1,1), X(1,2), X(1,3));
+                fprintf('  Primi 3 valori spettro 1 derivata: %.4f, %.4f, %.4f\n', X_prep(1,1), X_prep(1,2), X_prep(1,3));
+                
+                % Verifica: la 2a derivata dovrebbe avere valori generalmente più piccoli della 1a
+                % e più rumore se l'ordine del polinomio è troppo basso
         end
         
     catch ME
@@ -266,8 +276,29 @@ for p = 1:n_preprocessing
         fprintf('Uso metodo alternativo...\n');
     end
     
+    % VERIFICA DIMENSIONI e aggiusta wavelengths se necessario
+    if size(X_prep, 2) ~= size(X, 2)
+        fprintf('  ATTENZIONE: Preprocessing ha cambiato numero di variabili!\n');
+        fprintf('  Originale: %d variabili, Preprocessato: %d variabili\n', size(X,2), size(X_prep,2));
+        fprintf('  Questo può causare problemi con i loading plots\n');
+        % TODO: Potremmo dover aggiustare wavelengths qui
+    end
+    
+    % DIAGNOSTICA PRIMA del mean centering
+    fprintf('  Range prima di mean centering: [%.6f, %.6f]\n', min(X_prep(:)), max(X_prep(:)));
+    fprintf('  Std prima di mean centering: %.6f\n', std(X_prep(:)));
+    
     % Applica SEMPRE mean centering alla fine
     X_prep = X_prep - mean(X_prep, 1);
+    
+    % DIAGNOSTICA DOPO mean centering
+    fprintf('  Range dopo mean centering: [%.6f, %.6f]\n', min(X_prep(:)), max(X_prep(:)));
+    fprintf('  Std dopo mean centering: %.6f\n', std(X_prep(:)));
+    
+    % VERIFICA FINALE: Controlla se i dati sono tutti uguali (problema!)
+    if std(X_prep(:)) < 1e-10
+        warning('I dati preprocessati hanno varianza quasi zero! Potrebbe esserci un problema.');
+    end
     
     %% PCA con PLS_Toolbox
     % Il PLS_Toolbox ha una sintassi diversa: pca(X, ncomp, options)
@@ -472,6 +503,16 @@ for p = 1:n_preprocessing
         fprintf('\n');
     end
     
+    % VERIFICA: Controlla se questo preprocessing è identico al precedente
+    if p > 1
+        % Confronta X_prep con il preprocessing precedente
+        diff_with_prev = norm(X_prep - results(p-1).X_prep, 'fro');
+        fprintf('  Differenza con preprocessing precedente: %.6e\n', diff_with_prev);
+        if diff_with_prev < 1e-10
+            warning('⚠ PREPROCESSING IDENTICO AL PRECEDENTE! Possibile bug nel codice.');
+        end
+    end
+    
     % Salva i risultati
     results(p).prep_type = prep_type;
     results(p).prep_name = prep_name;
@@ -481,98 +522,14 @@ for p = 1:n_preprocessing
     results(p).explained = explained;
     results(p).latent = latent;
     
+    % Salva anche un checksum per debug
+    results(p).checksum = sum(X_prep(:));
+    fprintf('  Checksum X_prep: %.6e\n', results(p).checksum);
+    
     fprintf('Varianza spiegata da PC1: %.2f%%\n', explained(1));
     fprintf('Varianza spiegata da PC2: %.2f%%\n', explained(2));
     fprintf('Varianza spiegata da PC1+PC2: %.2f%%\n', sum(explained(1:2)));
     fprintf('Varianza spiegata da PC1+PC2+PC3: %.2f%%\n', sum(explained(1:3)));
-    fprintf('\n');
-    
-    % Verifica dimensioni prima di gscatter
-    if size(scores, 1) ~= length(categories)
-        warning('Dimensioni non corrispondenti: scores=%d, categories=%d', size(scores,1), length(categories));
-        % Plot senza colori per categoria
-        plot(scores(:,1), scores(:,2), 'o', 'MarkerSize', 8);
-        xlabel(sprintf('PC1 (%.2f%%)', explained(1)));
-        ylabel(sprintf('PC2 (%.2f%%)', explained(2)));
-        title('Score Plot (PC1 vs PC2) - ERRORE categorie');
-        grid on;
-    else
-        % Usa gscatter SENZA specificare colori (li sceglie automaticamente)
-        gscatter(scores(:,1), scores(:,2), categories, [], 'o', 8);
-        xlabel(sprintf('PC1 (%.2f%%)', explained(1)));
-        ylabel(sprintf('PC2 (%.2f%%)', explained(2)));
-        title('Score Plot (PC1 vs PC2)');
-        legend(unique_cats, 'Location', 'best');
-        grid on;
-    end
-    
-    %% LOADING PLOT (PC1 e PC2)
-    subplot(2,2,4);
-    hold on;
-    
-    % Assicurati che wavelengths e loadings abbiano dimensioni compatibili
-    wavelengths_vec = wavelengths(:);  % Converti in vettore colonna
-    if size(loadings, 1) == length(wavelengths_vec)
-        x_axis = wavelengths_vec;
-        xlabel('Lunghezza d''onda (nm)');
-    else
-        % Se le dimensioni non corrispondono, usa indici
-        fprintf('  Info: Usando indici per asse x (loadings: %d, wavelengths: %d)\n', ...
-            size(loadings,1), length(wavelengths_vec));
-        x_axis = (1:size(loadings,1))';
-        xlabel('Indice variabile');
-    end
-    
-    % Plot loadings come linee
-    plot(x_axis, loadings(:,1), 'r-', 'LineWidth', 1.5, 'DisplayName', sprintf('PC1 (%.2f%%)', explained(1)));
-    plot(x_axis, loadings(:,2), 'b-', 'LineWidth', 1.5, 'DisplayName', sprintf('PC2 (%.2f%%)', explained(2)));
-    
-    % Aggiungi linea a zero
-    yline(0, 'k--', 'LineWidth', 0.5);
-    
-    % Evidenzia i 5 loadings più importanti per PC1
-    [~, top_idx_pc1] = sort(abs(loadings(:,1)), 'descend');
-    for j = 1:min(5, length(top_idx_pc1))
-        idx = top_idx_pc1(j);
-        if abs(loadings(idx,1)) > 0.05  % Solo se significativo
-            plot(x_axis(idx), loadings(idx,1), 'ro', 'MarkerSize', 6, 'MarkerFaceColor', 'r', 'HandleVisibility', 'off');
-        end
-    end
-    
-    ylabel('Loading');
-    title('Loading Plot (PC1 e PC2)');
-    legend('Location', 'best');
-    grid on;
-    hold off;
-    
-    %% SCREE PLOT
-    figure('Name', ['Scree Plot: ' prep_name], 'Position', [150 150 1200 400]);
-    
-    subplot(1,3,1);
-    plot(1:min(10,length(explained)), explained(1:min(10,length(explained))), 'o-', 'LineWidth', 2, 'MarkerSize', 8);
-    xlabel('Componente Principale');
-    ylabel('Varianza Spiegata (%)');
-    title('Scree Plot');
-    grid on;
-    
-    subplot(1,3,2);
-    bar(1:min(10,length(explained)), explained(1:min(10,length(explained))));
-    xlabel('Componente Principale');
-    ylabel('Varianza Spiegata (%)');
-    title('Varianza per PC');
-    grid on;
-    
-    subplot(1,3,3);
-    plot(1:min(10,length(explained)), cumsum(explained(1:min(10,length(explained)))), 's-', 'LineWidth', 2, 'MarkerSize', 8);
-    xlabel('Componente Principale');
-    ylabel('Varianza Cumulativa (%)');
-    title('Varianza Cumulativa');
-    grid on;
-    yline(70, '--g', '70%', 'LineWidth', 1.5);
-    yline(80, '--b', '80%', 'LineWidth', 1.5);
-    yline(90, '--r', '90%', 'LineWidth', 1.5);
-    
-    fprintf('\n');
 end
 
 %% CONFRONTO TRA PREPROCESSING
@@ -598,10 +555,7 @@ fprintf('RANKING PREPROCESSING (per varianza PC1+PC2)\n');
 fprintf('========================================\n\n');
 
 for i = 1:length(sorted_idx)
-    fprintf('%d. %s\n', i, results(sorted_idx(i)).prep_name);
-    fprintf('   Varianza PC1+PC2: %.2f%%\n', sum(results(sorted_idx(i)).explained(1:2)));
-    fprintf('   Varianza PC1: %.2f%%\n', results(sorted_idx(i)).explained(1));
-    fprintf('   Varianza PC2: %.2f%%\n\n', results(sorted_idx(i)).explained(2));
+    fprintf('%d. %s - Var(PC1+PC2): %.2f%%\n', i, results(sorted_idx(i)).prep_name, sum(results(sorted_idx(i)).explained(1:2)));
 end
 
 %% ANALISI DETTAGLIATA PER TUTTI I PREPROCESSING
@@ -609,8 +563,7 @@ fprintf('\n========================================\n');
 fprintf('GENERAZIONE ANALISI DETTAGLIATE\n');
 fprintf('========================================\n\n');
 
-for i = 1:n_preprocessing
-    idx = i;
+for idx = 1:n_preprocessing
     
     fprintf('\n========================================\n');
     fprintf('ANALISI DETTAGLIATA: %s\n', results(idx).prep_name);

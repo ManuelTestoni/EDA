@@ -10,9 +10,9 @@ category=cell2str(txt(2:end,1));
 
 %
 X=datix; % nome della matrice dati
-npc=1; % inserisci numero componenti
-pret='mn';% inserisci as per autoscaling; mn per mean centering
-if pret=='mn'
+npc=3; % inserisci numero componenti
+pret='as';% inserisci as per autoscaling; mn per mean centering
+if strcmp(pret,'mn')
 % calcola PCA con mean centering usando SVD
 Xcentered = X - mean(X);
 [U, S, V] = svd(Xcentered, 'econ');
@@ -72,7 +72,7 @@ recX = Xrec + mean(X);
 %   with the number of pc selcted use the command mahal 
 T2ok=mahal(scores,scores);
 T2 = sum((scores ./ sqrt(eigenvalues)').^2, 2);
-elseif pret=='as'
+elseif strcmp(pret,'as')
 % calcola PCA con autoscaling usando SVD
 Xmean = mean(X);
 Xstd = std(X);
@@ -132,8 +132,8 @@ varexpl = all_varexpl(1:npc);
 Xrec = scores * loading';
 residuals = Xscaled - Xrec;
 recX = Xrec .* Xstd + Xmean;
-% Aggiusta i loadings per riportarli alla scala originale
-loading = loading ./ Xstd';
+% I loadings rimangono normalizzati (non vengono scalati)
+% loading = loading ./ Xstd';  % Riga commentata per mantenere loadings normalizzati
 T2ok=mahal(scores,scores);
 T2 = sum((scores ./ sqrt(eigenvalues)').^2, 2);
 end

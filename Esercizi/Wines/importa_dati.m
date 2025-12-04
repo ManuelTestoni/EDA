@@ -1,6 +1,6 @@
 % Import wines.xls and prepare a dataset for PLS_Toolbox
 evrimovepath('top'); % to put PLS toolbox first on the path
-dati = importdata('wines_condescrvar.xls'); % import the file 
+dati = importdata('wines_condescrvar.xlsx'); % import the file 
 datix = dati.data.WINES; % extract the numeric part
 txt = dati.textdata.WINES; % extract the text part
 wines_ds = dataset(datix); % create a dataset

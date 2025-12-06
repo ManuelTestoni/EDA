@@ -34,6 +34,6 @@ if sel == 1
 end
 
 % disp('Disegnare i loadings come frecce');
-% disp('for i=1:nsamps');
-% disp('line([0 model.loads{2,1}(i,1)],[0 model.loads{2,1}(i,2)],[0 model.loads{2,1}(i,3)]);');
-% disp('end');
+disp('for i=1:nsamps');
+disp('line([0 model.loads{2,1}(i,1)],[0 model.loads{2,1}(i,2)],[0 model.loads{2,1}(i,3)]);');
+disp('end');

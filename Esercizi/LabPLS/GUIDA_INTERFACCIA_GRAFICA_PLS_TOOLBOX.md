@@ -49,6 +49,11 @@ whos
 - `X`, `X_cal`, `Xcal`, `wheat_ds`, ecc.
 - `Y`, `Y_cal`, `Ycal`, `Calibration_Y`, ecc.
 
+  Calibration_Y      415x1                3320  double               
+  Validation_X       108x100             86400  double               
+  Validation_Y       108x1                 864  double               
+  wheat_ds           415x100            341096  dataset 
+
 **Scrivi su un foglio i nomi delle variabili** che vedi nel Workspace perché ti serviranno dopo!
 
 ### Passo 1.3: Creare Dataset Objects (opzionale ma consigliato)
@@ -94,12 +99,25 @@ size(Y_cal)  % Dovrebbe essere 415 x 1
 
 ### Passo 2.3: Visualizzare gli spettri grezzi
 
-1. Nella finestra Analysis GUI, nel menu in alto:
-   - **Plots → Line Plot**
+1. Nella finestra Analysis GUI, hai diverse opzioni per visualizzare i dati:
 
-2. Si apre un grafico con tutti gli spettri sovrapposti
-   - Osserva la forma generale degli spettri
-   - Cerca anomalie o campioni molto diversi
+   **OPZIONE C - Command line (più semplice):**
+   Nel Command Window di MATLAB:
+   ```matlab
+   % Visualizzare gli spettri X_cal
+   figure;
+   plot(X_cal.data')  % Se è un dataset object
+   % Oppure
+   plot(X_cal')       % Se è una matrice normale
+   title('Spettri NIR Grezzi')
+   xlabel('Variabile (Lunghezza d''onda)')
+   ylabel('Assorbanza')
+   grid on
+   ```
+
+2. Osserva la forma generale degli spettri:
+   - Tutti gli spettri dovrebbero avere forma simile
+   - Cerca anomalie o campioni molto diversi dagli altri
 
 ### Passo 2.4: Applicare PREPROCESSING per PCA
 
@@ -142,8 +160,12 @@ Ora testiamo i diversi preprocessing richiesti dalla professoressa.
    - Si apre finestra MSC: lascia opzioni di default
    - Clicca **"Apply"**
 
-3. Visualizza effetto:
-   - **Plots → Line Plot**: vedi gli spettri dopo MSC (più uniformi)
+3. Visualizza effetto del preprocessing:
+   - Usa **Edit → View Data** o **FigBrowser** per vedere gli spettri
+   - Oppure usa command line:
+   ```matlab
+   figure; plot(X_cal.data')  % Vedi spettri dopo MSC (più uniformi)
+   ```
 
 4. Eseguire PCA con MSC:
    - Menu: **Analysis → PCA**
@@ -184,15 +206,14 @@ Ora testiamo i diversi preprocessing richiesti dalla professoressa.
    - Menu: **Preprocess → Standard Pretreatments → Savitzky-Golay**
    - Opzioni:
      - **Derivative Order**: 2
-     - **Window Size**: 15 (o 11-21, sperimenta)
-     - **Polynomial Order**: 2 o 3
-   - **Apply**
-
 4. **ATTENZIONE**: La 2nd derivative amplifica il rumore!
-   - Visualizza: **Plots → Line Plot** - spettri più "nervosi"
+   - Visualizza con **Edit → View Data** o command line - spettri più "nervosi"
 
 5. Esegui PCA
-6. Salva: `PCA_2ndDeriv.mat`
+
+
+6. Esegui PCA
+7. Salva: `PCA_2ndDeriv.mat`
 
 #### E) **COMBINAZIONI**
 
@@ -257,7 +278,9 @@ Applica il preprocessing che ha dato i risultati migliori in PCA (es. MSC):
 Preprocess → Standard Pretreatments → MSC → Apply
 ```
 
-Verifica con Line Plot che sia stato applicato.
+Verifica che sia stato applicato:
+- **Edit → View Data** per vedere gli spettri preprocessati
+- Oppure usa command line: `figure; plot(X_cal.data')`
 
 ### Passo 3.3: Costruire il modello PLS
 
@@ -733,10 +756,13 @@ addpath(genpath('/Applications/MATLAB/PLS_Toolbox'))     % Mac
 
 % Salvare path
 savepath
-```
-
 ### Problema: Preprocessing non si applica
 
+- Assicurati di cliccare **"Apply"** dopo aver selezionato il preprocessing
+- Verifica con **Edit → View Data** o nel Command Window che gli spettri siano cambiati:
+  ```matlab
+  figure; plot(X_cal.data')  % Visualizza spettri preprocessati
+  ```
 - Assicurati di cliccare **"Apply"** dopo aver selezionato il preprocessing
 - Verifica con **Line Plot** che gli spettri siano cambiati
 
@@ -840,12 +866,7 @@ Dal grafico fornito dalla professoressa:
 10. ✅ Confrontare performance (Cal vs CV vs Test)
 11. ✅ (Opzionale) Selezione variabili importanti
 12. ✅ Esportare tutti i grafici per il report
-
----
-
-## 📚 RIFERIMENTI RAPIDI MENU GUI
-
-**Analysis GUI - Menu Structure:**
+**Analysis GUI - Menu Structure (PLS Toolbox 9.5):**
 
 ```
 File
@@ -853,6 +874,10 @@ File
   ├── Open
   ├── Save Results As
   └── Export
+
+Edit
+  ├── View Data (per vedere spettri)
+  └── Plot Data
 
 Preprocess
   ├── None
@@ -863,27 +888,28 @@ Preprocess
       ├── SNV (Standard Normal Variate)
       └── Normalize
 
-Analysis
-  ├── PCA
-  ├── PLS (PLSR)
-  └── Other methods...
+Analysis (vedi screenshot - ha sottomenu)
+  ├── DECOMPOSITION
+  │   └── PCA
+  ├── REGRESSION
+  │   └── PLS (PLSR)
+  ├── CLUSTERING
+  ├── CLASSIFICATION
+  ├── STATISTICAL
+  └── MULTI-WAY
 
-Plots
-  ├── Line Plot
-  ├── Scores
-  │   ├── Scores Plot
-  │   └── PLS Inner Relation Plot
-  ├── Loadings
-  │   ├── Loadings Plot
-  │   ├── PLS Weights
-  │   ├── Regression Coefficients
-  │   ├── VIP
-  │   └── Selectivity Ratio
-  ├── Diagnostics
-  │   ├── Residuals Plot
-  │   ├── Histogram of Residuals
-  │   ├── Hotelling T²
-  │   └── Q-Residuals (SPE)
+Tools
+  └── Varie opzioni
+
+FigBrowser (in alto a destra)
+  └── Gestisce i grafici generati
+
+View (pannello sinistro)
+  └── Opzioni di visualizzazione dati
+```
+
+**NOTA**: Dopo aver eseguito PCA o PLS, i grafici (Scores, Loadings, ecc.) 
+si aprono automaticamente o puoi accedervi tramite il **FigBrowser**.   └── Q-Residuals (SPE)
   └── Predicted vs Measured
 
 Predict

@@ -435,6 +435,58 @@ grid on;
 saveas(gcf, 'Figures/auto_outputs/PLS_RMSE_Selection.png');
 close(gcf);
 
+% Additional plot: R² vs Number of LVs
+fprintf('Generating R² vs LV plot...\n');
+figure('Position', [100, 100, 900, 600]);
+
+% Calculate R² for each LV from the full model
+R2_cal_vec = zeros(max_LV, 1);
+R2_cv_vec = zeros(max_LV, 1);
+
+% Get predictions for all LVs from the full model
+[Y_fit_all_LV, ~, ~, ~] = modlpred(X_cal_scaled, pls_model, 0);
+[~, ~, ~, ~, Y_cv_all_LV] = crossval(X_cal_scaled, Y_cal_centered, pls_model, cvi, max_LV);
+
+for lv = 1:max_LV
+    % Extract predictions for this LV
+    if size(Y_fit_all_LV, 2) >= lv
+        y_fit_lv = Y_fit_all_LV(:, lv) + mean(Calibration_Y);
+    else
+        y_fit_lv = Y_fit_all_LV(:, end) + mean(Calibration_Y);
+    end
+    
+    if ndims(Y_cv_all_LV) == 3 && size(Y_cv_all_LV, 3) >= lv
+        y_cv_lv = Y_cv_all_LV(:, :, lv);
+        y_cv_lv = y_cv_lv(:) + mean(Calibration_Y);
+    elseif size(Y_cv_all_LV, 2) >= lv
+        y_cv_lv = Y_cv_all_LV(:, lv) + mean(Calibration_Y);
+    else
+        y_cv_lv = Y_cv_all_LV(:, end);
+        if ndims(Y_cv_all_LV) == 3
+            y_cv_lv = y_cv_lv(:);
+        end
+        y_cv_lv = y_cv_lv + mean(Calibration_Y);
+    end
+    
+    R2_cal_vec(lv) = corr(Calibration_Y, y_fit_lv)^2;
+    R2_cv_vec(lv) = corr(Calibration_Y, y_cv_lv)^2;
+end
+
+plot(1:max_LV, R2_cal_vec, 'b-o', 'LineWidth', 2, 'MarkerSize', 6, 'MarkerFaceColor', 'b');
+hold on;
+plot(1:max_LV, R2_cv_vec, 'r-s', 'LineWidth', 2, 'MarkerSize', 6, 'MarkerFaceColor', 'r');
+plot(opt_LV, R2_cv_vec(opt_LV), 'go', 'MarkerSize', 15, 'LineWidth', 3);
+hold off;
+xlabel('Number of Latent Variables', 'FontSize', 12, 'FontWeight', 'bold');
+ylabel('R²', 'FontSize', 12, 'FontWeight', 'bold');
+title('R² vs Number of Latent Variables', 'FontSize', 14, 'FontWeight', 'bold');
+legend('R² Calibration', 'R² Cross-Validation', ...
+    sprintf('Optimal LV = %d', opt_LV), 'Location', 'best');
+grid on;
+ylim([0.5 1.0]);
+saveas(gcf, 'Figures/auto_outputs/PLS_R2_vs_LV.png');
+close(gcf);
+
 % Rebuild model with optimal number of LVs
 fprintf('Rebuilding PLS model with optimal LVs (%d)...\n', opt_LV);
 pls_model_opt = pls(X_cal_scaled, Y_cal_centered, opt_LV);
@@ -497,7 +549,185 @@ end
 % Calculate leverage (Hotelling's T2)
 leverage = diag(T_scores * inv(T_scores' * T_scores) * T_scores');
 
-% 5.1: Inner Relation Plot (T1 vs U1)
+% 5.1: PLS Scores Plot (T1 vs T2)
+fprintf('Generating PLS scores plot...\n');
+figure('Position', [100, 100, 900, 700]);
+
+if size(T_scores, 2) >= 2
+    % Plot T1 vs T2
+    subplot(2,2,1);
+    plot(T_scores(:,1), T_scores(:,2), 'bo', 'MarkerSize', 6, 'MarkerFaceColor', 'b', 'MarkerEdgeColor', 'k');
+    xlabel('T1 (LV1)', 'FontSize', 11, 'FontWeight', 'bold');
+    ylabel('T2 (LV2)', 'FontSize', 11, 'FontWeight', 'bold');
+    title('PLS Scores: T1 vs T2', 'FontSize', 12, 'FontWeight', 'bold');
+    grid on;
+    axis square;
+end
+
+if size(T_scores, 2) >= 3
+    % Plot T1 vs T3
+    subplot(2,2,2);
+    plot(T_scores(:,1), T_scores(:,3), 'ro', 'MarkerSize', 6, 'MarkerFaceColor', 'r', 'MarkerEdgeColor', 'k');
+    xlabel('T1 (LV1)', 'FontSize', 11, 'FontWeight', 'bold');
+    ylabel('T3 (LV3)', 'FontSize', 11, 'FontWeight', 'bold');
+    title('PLS Scores: T1 vs T3', 'FontSize', 12, 'FontWeight', 'bold');
+    grid on;
+    axis square;
+    
+    % Plot T2 vs T3
+    subplot(2,2,3);
+    plot(T_scores(:,2), T_scores(:,3), 'go', 'MarkerSize', 6, 'MarkerFaceColor', 'g', 'MarkerEdgeColor', 'k');
+    xlabel('T2 (LV2)', 'FontSize', 11, 'FontWeight', 'bold');
+    ylabel('T3 (LV3)', 'FontSize', 11, 'FontWeight', 'bold');
+    title('PLS Scores: T2 vs T3', 'FontSize', 12, 'FontWeight', 'bold');
+    grid on;
+    axis square;
+end
+
+% Variance explained by each LV
+subplot(2,2,4);
+% Calculate variance explained by T-scores
+var_T = var(T_scores);
+var_T_pct = 100 * var_T / sum(var_T);
+bar(1:min(10, size(T_scores, 2)), var_T_pct(1:min(10, size(T_scores, 2))), 'FaceColor', [0.3 0.6 0.9]);
+xlabel('Latent Variable', 'FontSize', 11, 'FontWeight', 'bold');
+ylabel('Variance Explained (%)', 'FontSize', 11, 'FontWeight', 'bold');
+title('Variance Explained by LVs', 'FontSize', 12, 'FontWeight', 'bold');
+grid on;
+
+saveas(gcf, 'Figures/auto_outputs/PLS_Scores_Plot.png');
+close(gcf);
+
+% 5.2: PLS Loadings Plot
+fprintf('Generating PLS loadings plot...\n');
+figure('Position', [100, 100, 1200, 800]);
+
+P = pls_model_opt.loads{2};  % X-loadings
+
+% Plot first 4 LVs loadings
+for lv = 1:min(4, size(P, 2))
+    subplot(2, 2, lv);
+    plot(1:size(P, 1), P(:, lv), 'b-', 'LineWidth', 1.5);
+    xlabel('Variable Index (Wavelength)', 'FontSize', 10, 'FontWeight', 'bold');
+    ylabel(sprintf('Loading LV%d', lv), 'FontSize', 10, 'FontWeight', 'bold');
+    title(sprintf('PLS X-Loadings - LV%d', lv), 'FontSize', 11, 'FontWeight', 'bold');
+    grid on;
+end
+
+saveas(gcf, 'Figures/auto_outputs/PLS_Loadings_Plot.png');
+close(gcf);
+
+% 5.3: Inner Relation Plot for ALL LVs (T vs U)
+fprintf('Generating inner relation plots for all LVs...\n');
+
+% Get U scores (Y-scores)
+U_scores = pls_model_opt.loads{3};
+
+% Create grid of inner relation plots
+n_plots = min(opt_LV, 9);  % Max 9 plots (3x3 grid)
+n_rows = ceil(sqrt(n_plots));
+n_cols = ceil(n_plots / n_rows);
+
+figure('Position', [100, 100, 1400, 1000]);
+for lv = 1:n_plots
+    subplot(n_rows, n_cols, lv);
+    
+    if lv <= size(T_scores, 2) && lv <= size(U_scores, 2)
+        plot(T_scores(:, lv), U_scores(:, lv), 'bo', 'MarkerSize', 5, 'MarkerFaceColor', 'b');
+        
+        % Add regression line
+        p = polyfit(T_scores(:, lv), U_scores(:, lv), 1);
+        hold on;
+        x_line = [min(T_scores(:, lv)), max(T_scores(:, lv))];
+        plot(x_line, polyval(p, x_line), 'r-', 'LineWidth', 2);
+        
+        % Add zero lines
+        plot([0 0], ylim, 'g--', 'LineWidth', 1);
+        plot(xlim, [0 0], 'g--', 'LineWidth', 1);
+        hold off;
+        
+        xlabel(sprintf('T%d (X-scores)', lv), 'FontSize', 9, 'FontWeight', 'bold');
+        ylabel(sprintf('U%d (Y-scores)', lv), 'FontSize', 9, 'FontWeight', 'bold');
+        title(sprintf('Inner Relation LV%d (R²=%.3f)', lv, corr(T_scores(:, lv), U_scores(:, lv))^2), ...
+            'FontSize', 10, 'FontWeight', 'bold');
+        grid on;
+        axis square;
+    end
+end
+
+saveas(gcf, 'Figures/auto_outputs/PLS_Inner_Relation_All_LVs.png');
+close(gcf);
+
+% 5.4: Q Residuals vs Leverage (colored by Y-values)
+fprintf('Generating Q residuals vs leverage plot...\n');
+figure('Position', [100, 100, 900, 700]);
+
+% Calculate Q residuals (SPE - Squared Prediction Error)
+X_reconstructed = T_scores * pls_model_opt.loads{2}(:, 1:opt_LV)';
+residuals_X = X_cal_scaled - X_reconstructed;
+
+% Ensure residuals_X is numeric
+if ~isnumeric(residuals_X)
+    if isstruct(residuals_X) && isfield(residuals_X, 'data')
+        residuals_X = residuals_X.data;
+    else
+        residuals_X = double(residuals_X);
+    end
+end
+
+Q_residuals = sum(residuals_X.^2, 2);
+
+% Normalize Q residuals
+Q_residuals_reduced = Q_residuals / mean(Q_residuals);
+
+% Create scatter plot colored by Y values
+scatter(leverage, Q_residuals_reduced, 50, Calibration_Y, 'filled', 'MarkerEdgeColor', 'k');
+colorbar;
+colormap(jet);
+xlabel('Leverage (Hotelling T²)', 'FontSize', 12, 'FontWeight', 'bold');
+ylabel('Q Residuals Reduced', 'FontSize', 12, 'FontWeight', 'bold');
+title('Q Residuals vs Leverage (colored by Y)', 'FontSize', 14, 'FontWeight', 'bold');
+grid on;
+
+% Add threshold lines
+hold on;
+h_line = 3 * mean(leverage);
+v_line = 3;  % Q threshold at 3x mean
+plot([h_line h_line], ylim, 'r--', 'LineWidth', 2);
+plot(xlim, [v_line v_line], 'r--', 'LineWidth', 2);
+hold off;
+
+saveas(gcf, 'Figures/auto_outputs/PLS_Q_Residuals_vs_Leverage.png');
+close(gcf);
+
+% 5.5: Y Standardized Residuals vs Leverage
+fprintf('Generating standardized residuals vs leverage plot...\n');
+figure('Position', [100, 100, 900, 700]);
+
+% Standardize residuals
+std_residuals_cal = residuals_cal / std(residuals_cal);
+
+% Scatter plot colored by Y
+scatter(leverage, std_residuals_cal, 50, Calibration_Y, 'filled', 'MarkerEdgeColor', 'k');
+colorbar;
+colormap(jet);
+xlabel('Leverage', 'FontSize', 12, 'FontWeight', 'bold');
+ylabel('Y Standardized Residuals', 'FontSize', 12, 'FontWeight', 'bold');
+title('Standardized Residuals vs Leverage (colored by Y)', 'FontSize', 14, 'FontWeight', 'bold');
+grid on;
+
+% Add reference lines
+hold on;
+plot(xlim, [0 0], 'k--', 'LineWidth', 1.5);
+plot(xlim, [2 2], 'r--', 'LineWidth', 1);
+plot(xlim, [-2 -2], 'r--', 'LineWidth', 1);
+plot([3*mean(leverage) 3*mean(leverage)], ylim, 'r--', 'LineWidth', 1);
+hold off;
+
+saveas(gcf, 'Figures/auto_outputs/PLS_Standardized_Residuals_vs_Leverage.png');
+close(gcf);
+
+% 5.6: Inner Relation Plot (T1 vs U1) - Original
 fprintf('Generating inner relation plot...\n');
 figure('Position', [100, 100, 800, 600]);
 T1 = pls_model_opt.loads{1}(:, 1);
@@ -519,7 +749,7 @@ hold off;
 saveas(gcf, 'Figures/auto_outputs/PLS_Inner_Relation.png');
 close(gcf);
 
-% 5.2: Leverage Plot
+% 5.4: Leverage Plot
 fprintf('Generating leverage plot...\n');
 figure('Position', [100, 100, 900, 600]);
 bar(leverage, 'FaceColor', [0.3 0.6 0.9]);
@@ -545,7 +775,7 @@ hold off;
 saveas(gcf, 'Figures/auto_outputs/PLS_Leverage.png');
 close(gcf);
 
-% 5.3: Residuals vs Fitted
+% 5.5: Residuals vs Fitted
 fprintf('Generating residuals plot...\n');
 figure('Position', [100, 100, 900, 600]);
 plot(Y_fitted, residuals_cal, 'bo', 'MarkerSize', 6, 'MarkerFaceColor', 'b');
@@ -560,10 +790,11 @@ hold off;
 saveas(gcf, 'Figures/auto_outputs/PLS_Residuals_vs_Fitted.png');
 close(gcf);
 
-% 5.4: Y Measured vs Y Fitted (Calibration)
+% 5.8: Y Measured vs Y Fitted (Calibration) - Enhanced
 fprintf('Generating Y measured vs Y fitted plot...\n');
-figure('Position', [100, 100, 800, 800]);
-plot(Calibration_Y, Y_fitted, 'bo', 'MarkerSize', 6, 'MarkerFaceColor', 'b');
+figure('Position', [100, 100, 900, 800]);
+scatter(Calibration_Y, Y_fitted, 40, Calibration_Y, 'filled', 'MarkerEdgeColor', 'k');
+colormap(jet);
 hold on;
 % Perfect prediction line
 min_val = min([Calibration_Y; Y_fitted]);
@@ -577,23 +808,29 @@ title(sprintf('Calibration: Y Measured vs Y Fitted (LV=%d)', opt_LV), ...
 axis equal;
 axis([min_val max_val min_val max_val]);
 grid on;
+colorbar;
 
-% Add statistics
+% Add statistics box
 R2_cal = corr(Calibration_Y, Y_fitted)^2;
 RMSE_cal = sqrt(mean(residuals_cal.^2));
-text(0.05, 0.95, sprintf('R² = %.4f\nRMSE = %.4f', R2_cal, RMSE_cal), ...
-    'Units', 'normalized', 'FontSize', 11, 'BackgroundColor', 'w', ...
-    'VerticalAlignment', 'top');
+bias_cal = mean(residuals_cal);
+annotation('textbox', [0.15, 0.75, 0.25, 0.15], ...
+    'String', {sprintf('RMSEC = %.4f', RMSE_cal), ...
+               sprintf('R² = %.4f', R2_cal), ...
+               sprintf('Bias = %.4f', bias_cal)}, ...
+    'FontSize', 11, 'FontWeight', 'bold', ...
+    'BackgroundColor', 'w', 'EdgeColor', 'k', 'LineWidth', 1.5);
 
 saveas(gcf, 'Figures/auto_outputs/PLS_Ymeas_vs_Yfit.png');
 close(gcf);
 
-% 5.5: Y Measured vs Y Cross-Validated
+% 5.9: Y Measured vs Y Cross-Validated - Enhanced
 fprintf('Generating Y measured vs Y cross-validated plot...\n');
-figure('Position', [100, 100, 800, 800]);
-plot(Calibration_Y, Y_cv, 'ro', 'MarkerSize', 6, 'MarkerFaceColor', 'r');
+figure('Position', [100, 100, 900, 800]);
+scatter(Calibration_Y, Y_cv, 40, Calibration_Y, 'filled', 'MarkerEdgeColor', 'k');
+colormap(jet);
 hold on;
-plot([min_val max_val], [min_val max_val], 'k--', 'LineWidth', 2);
+plot([min_val max_val], [min_val max_val], 'r--', 'LineWidth', 2);
 hold off;
 xlabel('Y Measured', 'FontSize', 12, 'FontWeight', 'bold');
 ylabel('Y Cross-Validated', 'FontSize', 12, 'FontWeight', 'bold');
@@ -602,18 +839,56 @@ title(sprintf('Cross-Validation: Y Measured vs Y CV (LV=%d)', opt_LV), ...
 axis equal;
 axis([min_val max_val min_val max_val]);
 grid on;
+colorbar;
 
-% Add statistics
+% Add statistics box
 R2_cv = corr(Calibration_Y, Y_cv)^2;
 RMSE_cv = sqrt(mean(residuals_cv.^2));
-text(0.05, 0.95, sprintf('R² = %.4f\nRMSE = %.4f', R2_cv, RMSE_cv), ...
-    'Units', 'normalized', 'FontSize', 11, 'BackgroundColor', 'w', ...
-    'VerticalAlignment', 'top');
+bias_cv = mean(residuals_cv);
+annotation('textbox', [0.15, 0.75, 0.25, 0.15], ...
+    'String', {sprintf('RMSECV = %.4f', RMSE_cv), ...
+               sprintf('R² = %.4f', R2_cv), ...
+               sprintf('CV Bias = %.4f', bias_cv)}, ...
+    'FontSize', 11, 'FontWeight', 'bold', ...
+    'BackgroundColor', 'w', 'EdgeColor', 'k', 'LineWidth', 1.5);
 
 saveas(gcf, 'Figures/auto_outputs/PLS_Ymeas_vs_YCV.png');
 close(gcf);
 
-% 5.6: Histogram of Residuals
+% 5.10: Combined Calibration and CV plot
+fprintf('Generating combined calibration and CV plot...\n');
+figure('Position', [100, 100, 1200, 600]);
+
+subplot(1, 2, 1);
+scatter(Calibration_Y, Y_fitted, 40, 'b', 'filled', 'MarkerEdgeColor', 'k');
+hold on;
+plot([min_val max_val], [min_val max_val], 'r--', 'LineWidth', 2);
+hold off;
+xlabel('Y Measured', 'FontSize', 11, 'FontWeight', 'bold');
+ylabel('Y Fitted', 'FontSize', 11, 'FontWeight', 'bold');
+title(sprintf('Calibration (RMSEC=%.4f, R²=%.4f)', RMSE_cal, R2_cal), ...
+    'FontSize', 12, 'FontWeight', 'bold');
+axis equal;
+axis([min_val max_val min_val max_val]);
+grid on;
+
+subplot(1, 2, 2);
+scatter(Calibration_Y, Y_cv, 40, 'r', 'filled', 'MarkerEdgeColor', 'k');
+hold on;
+plot([min_val max_val], [min_val max_val], 'k--', 'LineWidth', 2);
+hold off;
+xlabel('Y Measured', 'FontSize', 11, 'FontWeight', 'bold');
+ylabel('Y CV', 'FontSize', 11, 'FontWeight', 'bold');
+title(sprintf('Cross-Validation (RMSECV=%.4f, R²=%.4f)', RMSE_cv, R2_cv), ...
+    'FontSize', 12, 'FontWeight', 'bold');
+axis equal;
+axis([min_val max_val min_val max_val]);
+grid on;
+
+saveas(gcf, 'Figures/auto_outputs/PLS_Cal_vs_CV_Comparison.png');
+close(gcf);
+
+% 5.11: Histogram of Residuals
 fprintf('Generating residuals histogram...\n');
 figure('Position', [100, 100, 900, 600]);
 subplot(1,2,1);
@@ -673,6 +948,39 @@ for lv = 1:min(4, opt_LV)  % Plot first 4 LVs
     end
 end
 saveas(gcf, 'Figures/auto_outputs/PLS_Weights.png');
+close(gcf);
+
+% 6.1b: Weights vs Loadings Comparison (LV1)
+fprintf('Generating weights vs loadings comparison...\n');
+figure('Position', [100, 100, 1400, 500]);
+
+P = pls_model_opt.loads{2};  % X-loadings
+
+subplot(1, 2, 1);
+plot(var_indices, W(:, 1), 'r-', 'LineWidth', 2);
+hold on;
+plot(var_indices, P(:, 1), 'b-', 'LineWidth', 2);
+hold off;
+xlabel('Variable Index (Wavelength)', 'FontSize', 11, 'FontWeight', 'bold');
+ylabel('Weight / Loading Value', 'FontSize', 11, 'FontWeight', 'bold');
+title('LV1: Weights vs Loadings', 'FontSize', 12, 'FontWeight', 'bold');
+legend('Weights (W1)', 'Loadings (P1)', 'Location', 'best');
+grid on;
+
+if opt_LV >= 2
+    subplot(1, 2, 2);
+    plot(var_indices, W(:, 2), 'r-', 'LineWidth', 2);
+    hold on;
+    plot(var_indices, P(:, 2), 'b-', 'LineWidth', 2);
+    hold off;
+    xlabel('Variable Index (Wavelength)', 'FontSize', 11, 'FontWeight', 'bold');
+    ylabel('Weight / Loading Value', 'FontSize', 11, 'FontWeight', 'bold');
+    title('LV2: Weights vs Loadings', 'FontSize', 12, 'FontWeight', 'bold');
+    legend('Weights (W2)', 'Loadings (P2)', 'Location', 'best');
+    grid on;
+end
+
+saveas(gcf, 'Figures/auto_outputs/PLS_Weights_vs_Loadings.png');
 close(gcf);
 
 % 6.2: Regression Coefficients
@@ -796,36 +1104,93 @@ fprintf('========================================\n\n');
 
 fprintf('Applying preprocessing to test set...\n');
 
-% Apply same preprocessing to test set
+% CRITICAL: Use SAME preprocessing as calibration with CALIBRATION PARAMETERS
+% This ensures test set is on the same scale as training data
+
+% Step 1: Get MSC/preprocessing parameters from calibration
+% The MSC must be calculated from calibration data and applied to test
 X_test_prep = Validation_X;
 
-% Apply selected preprocessing
+% Apply selected preprocessing using CALIBRATION reference
 switch SELECTED_PREPROCESSING
     case 'baseline'
         X_test_prep = baseline(X_test_prep);
+        
     case 'msc'
-        X_test_prep = mscorr(X_test_prep);
+        % CRITICAL FIX: MSC must use calibration mean spectrum as reference
+        % First, get calibration mean from the preprocessed calibration data
+        X_cal_for_msc = Calibration_X;
+        
+        % Ensure X_cal_for_msc is numeric
+        if ~isnumeric(X_cal_for_msc)
+            if isstruct(X_cal_for_msc) && isfield(X_cal_for_msc, 'data')
+                X_cal_for_msc = X_cal_for_msc.data;
+            else
+                X_cal_for_msc = double(X_cal_for_msc);
+            end
+        end
+        
+        mean_cal_spectrum = mean(X_cal_for_msc, 1);
+        
+        % Apply MSC to test using calibration reference
+        % mscorr with second argument uses that as reference
+        X_test_prep = mscorr(X_test_prep, mean_cal_spectrum);
+        
     case 'derivative2'
         X_test_prep = savgol(X_test_prep, 2, 15, 2);
+        
     case 'baseline_msc'
         X_test_prep = baseline(X_test_prep);
-        X_test_prep = mscorr(X_test_prep);
+        X_cal_for_msc = Calibration_X;
+        X_cal_for_msc = baseline(X_cal_for_msc);
+        
+        % Ensure X_cal_for_msc is numeric
+        if ~isnumeric(X_cal_for_msc)
+            if isstruct(X_cal_for_msc) && isfield(X_cal_for_msc, 'data')
+                X_cal_for_msc = X_cal_for_msc.data;
+            else
+                X_cal_for_msc = double(X_cal_for_msc);
+            end
+        end
+        
+        mean_cal_spectrum = mean(X_cal_for_msc, 1);
+        X_test_prep = mscorr(X_test_prep, mean_cal_spectrum);
+        
     case 'baseline_deriv2'
         X_test_prep = baseline(X_test_prep);
         X_test_prep = savgol(X_test_prep, 2, 15, 2);
+        
     case 'deriv2_msc'
         X_test_prep = savgol(X_test_prep, 2, 15, 2);
-        X_test_prep = mscorr(X_test_prep);
+        X_cal_for_msc = savgol(Calibration_X, 2, 15, 2);
+        
+        % Ensure X_cal_for_msc is numeric
+        if ~isnumeric(X_cal_for_msc)
+            if isstruct(X_cal_for_msc) && isfield(X_cal_for_msc, 'data')
+                X_cal_for_msc = X_cal_for_msc.data;
+            else
+                X_cal_for_msc = double(X_cal_for_msc);
+            end
+        end
+        
+        mean_cal_spectrum = mean(X_cal_for_msc, 1);
+        X_test_prep = mscorr(X_test_prep, mean_cal_spectrum);
 end
 
-% Apply autoscaling (using calibration parameters)
-X_test_scaled = auto(X_test_prep, params);
+% Step 2: Apply autoscaling using CALIBRATION parameters
+% preproc_params_selected contains mean and std from calibration
+X_test_scaled = auto(X_test_prep, preproc_params_selected);
 
-% Predict test set using PLS Toolbox
-Y_test_pred = pls_model_opt.reg(:, end)' * X_test_scaled' + ...
-    mean(Calibration_Y);  % Add back Y mean
+fprintf('  Preprocessing applied with calibration parameters\n');
+fprintf('  Method: %s\n', selected_name);
 
-Y_test_pred = Y_test_pred';
+% Predict test set using PLS Toolbox modlpred function
+% This ensures correct handling of all model parameters
+[Y_test_pred_centered, ~, ~, ~] = modlpred(X_test_scaled, pls_model_opt, 0);
+
+% Convert back to original scale (add Y mean from calibration)
+Y_test_pred = Y_test_pred_centered + mean(Calibration_Y);
+Y_test_pred = Y_test_pred(:);  % Ensure column vector
 
 % Calculate test set statistics
 residuals_test = Validation_Y - Y_test_pred;
@@ -919,6 +1284,291 @@ grid on;
 
 saveas(gcf, 'Figures/auto_outputs/PLS_Performance_Comparison.png');
 close(gcf);
+
+%% ========================================================================
+% SECTION 7B: DIAGNOSTIC ANALYSIS AND SLOPE-BIAS CORRECTION
+% ========================================================================
+
+fprintf('\n========================================\n');
+fprintf('DIAGNOSTIC ANALYSIS\n');
+fprintf('========================================\n\n');
+
+% 7B.1: Range Y Analysis
+fprintf('--- RANGE Y ANALYSIS ---\n');
+fprintf('Calibration:\n');
+fprintf('  Min: %.2f, Max: %.2f, Range: %.2f\n', ...
+    min(Calibration_Y), max(Calibration_Y), range(Calibration_Y));
+fprintf('  Mean: %.2f, Std: %.2f\n', mean(Calibration_Y), std(Calibration_Y));
+
+fprintf('Test:\n');
+fprintf('  Min: %.2f, Max: %.2f, Range: %.2f\n', ...
+    min(Validation_Y), max(Validation_Y), range(Validation_Y));
+fprintf('  Mean: %.2f, Std: %.2f\n', mean(Validation_Y), std(Validation_Y));
+
+fprintf('Comparison:\n');
+fprintf('  Std ratio (Test/Cal): %.2f\n', std(Validation_Y) / std(Calibration_Y));
+fprintf('  Mean difference: %.2f\n', mean(Validation_Y) - mean(Calibration_Y));
+fprintf('\n');
+
+% Plot Y distributions
+figure('Position', [100, 100, 1200, 500]);
+subplot(1,3,1);
+histogram(Calibration_Y, 30, 'FaceColor', [0.3 0.6 0.9]);
+xlabel('Protein Content (%)', 'FontSize', 11);
+ylabel('Frequency', 'FontSize', 11);
+title(sprintf('Calibration (n=%d)', length(Calibration_Y)), 'FontSize', 12);
+grid on;
+
+subplot(1,3,2);
+histogram(Validation_Y, 20, 'FaceColor', [0.9 0.4 0.3]);
+xlabel('Protein Content (%)', 'FontSize', 11);
+ylabel('Frequency', 'FontSize', 11);
+title(sprintf('Test (n=%d)', length(Validation_Y)), 'FontSize', 12);
+grid on;
+
+subplot(1,3,3);
+group_labels = [ones(length(Calibration_Y),1); 2*ones(length(Validation_Y),1)];
+boxplot([Calibration_Y; Validation_Y], group_labels);
+set(gca, 'XTickLabel', {'Calibration', 'Test'});
+ylabel('Protein Content (%)', 'FontSize', 11);
+title('Distribution Comparison', 'FontSize', 12);
+grid on;
+
+saveas(gcf, 'Figures/auto_outputs/Diagnostic_Y_Distributions.png');
+close(gcf);
+
+% 7B.2: Spectral Comparison
+fprintf('--- SPECTRAL COMPARISON ---\n');
+
+% Calculate mean spectra (ensure they are numeric)
+X_cal_numeric = X_cal_scaled;
+if ~isnumeric(X_cal_numeric)
+    if isstruct(X_cal_numeric) && isfield(X_cal_numeric, 'data')
+        X_cal_numeric = X_cal_numeric.data;
+    else
+        X_cal_numeric = double(X_cal_numeric);
+    end
+end
+
+X_test_numeric = X_test_scaled;
+if ~isnumeric(X_test_numeric)
+    if isstruct(X_test_numeric) && isfield(X_test_numeric, 'data')
+        X_test_numeric = X_test_numeric.data;
+    else
+        X_test_numeric = double(X_test_numeric);
+    end
+end
+
+mean_spec_cal = mean(X_cal_numeric, 1);
+mean_spec_test = mean(X_test_numeric, 1);
+spec_diff = mean_spec_test - mean_spec_cal;
+
+fprintf('Mean spectral difference: %.4f\n', mean(abs(spec_diff)));
+fprintf('Max spectral difference: %.4f (variable %d)\n', ...
+    max(abs(spec_diff)), find(abs(spec_diff) == max(abs(spec_diff)), 1));
+fprintf('RMS spectral difference: %.4f\n', sqrt(mean(spec_diff.^2)));
+fprintf('\n');
+
+% Plot spectral comparison
+figure('Position', [100, 100, 1200, 900]);
+
+subplot(3,1,1);
+plot(mean_spec_cal, 'b-', 'LineWidth', 1.5);
+ylabel('Intensity', 'FontSize', 11);
+title('Mean Spectrum - Calibration', 'FontSize', 12, 'FontWeight', 'bold');
+grid on;
+xlim([1 100]);
+
+subplot(3,1,2);
+plot(mean_spec_test, 'r-', 'LineWidth', 1.5);
+ylabel('Intensity', 'FontSize', 11);
+title('Mean Spectrum - Test', 'FontSize', 12, 'FontWeight', 'bold');
+grid on;
+xlim([1 100]);
+
+subplot(3,1,3);
+plot(spec_diff, 'k-', 'LineWidth', 1.5);
+hold on;
+plot([1 100], [0 0], 'r--', 'LineWidth', 1);
+hold off;
+xlabel('Variable Index (Wavelength)', 'FontSize', 11);
+ylabel('Δ Intensity', 'FontSize', 11);
+title('Difference (Test - Calibration)', 'FontSize', 12, 'FontWeight', 'bold');
+grid on;
+xlim([1 100]);
+
+saveas(gcf, 'Figures/auto_outputs/Diagnostic_Spectral_Comparison.png');
+close(gcf);
+
+% 7B.3: SLOPE-BIAS CORRECTION
+fprintf('--- SLOPE-BIAS CORRECTION ---\n');
+
+% Calculate slope and intercept from linear regression
+p = polyfit(Y_test_pred, Validation_Y, 1);
+slope = p(1);
+intercept = p(2);
+
+fprintf('Linear correction parameters:\n');
+fprintf('  Slope: %.4f\n', slope);
+fprintf('  Intercept: %.4f\n', intercept);
+
+% Apply correction
+Y_test_corrected = slope * Y_test_pred + intercept;
+
+% Recalculate metrics
+residuals_corrected = Validation_Y - Y_test_corrected;
+RMSEP_corrected = sqrt(mean(residuals_corrected.^2));
+R2_corrected = corr(Validation_Y, Y_test_corrected)^2;
+bias_corrected = mean(residuals_corrected);
+
+fprintf('\nPERFORMANCE AFTER CORRECTION:\n');
+fprintf('  R² = %.4f (was %.4f, improvement: %+.2f%%)\n', ...
+    R2_corrected, R2_test, (R2_corrected - R2_test) / max(abs(R2_test), 0.001) * 100);
+fprintf('  RMSEP = %.4f (was %.4f, improvement: %+.2f%%)\n', ...
+    RMSEP_corrected, RMSEP, (RMSEP - RMSEP_corrected) / RMSEP * 100);
+fprintf('  Bias = %.4f (was %.4f)\n', bias_corrected, bias);
+fprintf('\n');
+
+% Plot before/after correction
+figure('Position', [100, 100, 1400, 600]);
+
+subplot(1,2,1);
+scatter(Validation_Y, Y_test_pred, 50, 'r', 'filled', 'MarkerEdgeColor', 'k');
+hold on;
+plot([min_val_test max_val_test], [min_val_test max_val_test], 'k--', 'LineWidth', 2);
+hold off;
+xlabel('Y Measured', 'FontSize', 11, 'FontWeight', 'bold');
+ylabel('Y Predicted', 'FontSize', 11, 'FontWeight', 'bold');
+title(sprintf('BEFORE Correction\nR²=%.4f, RMSEP=%.4f, Bias=%.4f', ...
+    R2_test, RMSEP, bias), 'FontSize', 12, 'FontWeight', 'bold');
+axis equal;
+axis([min_val_test max_val_test min_val_test max_val_test]);
+grid on;
+
+subplot(1,2,2);
+scatter(Validation_Y, Y_test_corrected, 50, 'g', 'filled', 'MarkerEdgeColor', 'k');
+hold on;
+plot([min_val_test max_val_test], [min_val_test max_val_test], 'k--', 'LineWidth', 2);
+hold off;
+xlabel('Y Measured', 'FontSize', 11, 'FontWeight', 'bold');
+ylabel('Y Corrected', 'FontSize', 11, 'FontWeight', 'bold');
+title(sprintf('AFTER Slope-Bias Correction\nR²=%.4f, RMSEP=%.4f, Bias=%.4f', ...
+    R2_corrected, RMSEP_corrected, bias_corrected), 'FontSize', 12, 'FontWeight', 'bold');
+axis equal;
+axis([min_val_test max_val_test min_val_test max_val_test]);
+grid on;
+
+saveas(gcf, 'Figures/auto_outputs/Diagnostic_Slope_Bias_Correction.png');
+close(gcf);
+
+% 7B.4: Outlier Analysis
+fprintf('--- OUTLIER ANALYSIS ---\n');
+
+% Identify outliers (residuals > 3×RMSEP)
+outliers_idx = find(abs(residuals_test) > 3*RMSEP);
+fprintf('Outliers detected (|residual| > 3×RMSEP): %d (%.1f%%)\n', ...
+    length(outliers_idx), length(outliers_idx)/length(residuals_test)*100);
+
+if ~isempty(outliers_idx)
+    fprintf('  Sample indices: ');
+    fprintf('%d ', outliers_idx);
+    fprintf('\n');
+    fprintf('  Residuals: ');
+    fprintf('%.3f ', residuals_test(outliers_idx));
+    fprintf('\n');
+end
+
+% Plot residuals with outlier threshold
+figure('Position', [100, 100, 1200, 500]);
+
+subplot(1,2,1);
+plot(residuals_test, 'bo-', 'MarkerSize', 6, 'MarkerFaceColor', 'b');
+hold on;
+plot([1 length(residuals_test)], [3*RMSEP 3*RMSEP], 'r--', 'LineWidth', 2);
+plot([1 length(residuals_test)], [-3*RMSEP -3*RMSEP], 'r--', 'LineWidth', 2);
+plot([1 length(residuals_test)], [0 0], 'k-', 'LineWidth', 1);
+if ~isempty(outliers_idx)
+    plot(outliers_idx, residuals_test(outliers_idx), 'ro', 'MarkerSize', 12, ...
+        'LineWidth', 2);
+end
+hold off;
+xlabel('Sample Index', 'FontSize', 11);
+ylabel('Residual', 'FontSize', 11);
+title('Test Residuals with Outlier Threshold', 'FontSize', 12);
+legend('Residuals', '+3×RMSEP', '-3×RMSEP', 'Zero', 'Outliers', 'Location', 'best');
+grid on;
+
+subplot(1,2,2);
+histogram(residuals_test, 20, 'FaceColor', [0.3 0.6 0.9]);
+hold on;
+xline(3*RMSEP, 'r--', 'LineWidth', 2);
+xline(-3*RMSEP, 'r--', 'LineWidth', 2);
+xline(0, 'k-', 'LineWidth', 1.5);
+hold off;
+xlabel('Residual Value', 'FontSize', 11);
+ylabel('Frequency', 'FontSize', 11);
+title(sprintf('Residual Distribution\nMean=%.3f, Std=%.3f', ...
+    mean(residuals_test), std(residuals_test)), 'FontSize', 12);
+grid on;
+
+saveas(gcf, 'Figures/auto_outputs/Diagnostic_Outlier_Analysis.png');
+close(gcf);
+
+% 7B.5: Summary Report
+fprintf('\n========================================\n');
+fprintf('DIAGNOSTIC SUMMARY\n');
+fprintf('========================================\n\n');
+
+fprintf('1. RANGE ANALYSIS:\n');
+if std(Validation_Y) < 0.7 * std(Calibration_Y)
+    fprintf('   WARNING: Test set has RESTRICTED RANGE (std ratio = %.2f)\n', ...
+        std(Validation_Y) / std(Calibration_Y));
+    fprintf('   This contributes to low R²\n');
+else
+    fprintf('   OK: Test set range is comparable to calibration\n');
+end
+
+fprintf('\n2. SPECTRAL DRIFT:\n');
+if sqrt(mean(spec_diff.^2)) > 0.5
+    fprintf('   WARNING: SIGNIFICANT spectral drift detected (RMS = %.4f)\n', ...
+        sqrt(mean(spec_diff.^2)));
+    fprintf('   Possible instrumental or temporal drift\n');
+else
+    fprintf('   OK: Spectral drift within acceptable limits\n');
+end
+
+fprintf('\n3. BIAS ANALYSIS:\n');
+if abs(bias) > 0.15
+    fprintf('   WARNING: SIGNIFICANT bias detected (%.4f)\n', bias);
+    fprintf('   Systematic prediction error confirmed\n');
+else
+    fprintf('   OK: Bias is acceptable\n');
+end
+
+fprintf('\n4. SLOPE-BIAS CORRECTION EFFECTIVENESS:\n');
+fprintf('   R² improvement: %.4f → %.4f (%+.1f%%)\n', ...
+    R2_test, R2_corrected, (R2_corrected - R2_test) / max(abs(R2_test), 0.001) * 100);
+fprintf('   RMSEP improvement: %.4f → %.4f (%.1f%%)\n', ...
+    RMSEP, RMSEP_corrected, (RMSEP - RMSEP_corrected) / RMSEP * 100);
+
+if R2_corrected > 0.70
+    fprintf('   STATUS: Model USABLE after correction\n');
+elseif R2_corrected > 0.50
+    fprintf('   STATUS: Model MARGINALLY usable (screening only)\n');
+else
+    fprintf('   STATUS: Model needs MAJOR IMPROVEMENT (model update required)\n');
+end
+
+fprintf('\n5. OUTLIERS:\n');
+if length(outliers_idx) > 0.05 * length(residuals_test)
+    fprintf('   WARNING: HIGH outlier rate (%.1f%%) - investigate samples\n', ...
+        length(outliers_idx)/length(residuals_test)*100);
+else
+    fprintf('   OK: Outlier rate acceptable (%.1f%%)\n', ...
+        length(outliers_idx)/length(residuals_test)*100);
+end
+
+fprintf('\n========================================\n\n');
 
 %% ========================================================================
 % SECTION 8: VARIABLE SELECTION AND MODEL IMPROVEMENT

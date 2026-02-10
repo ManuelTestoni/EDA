@@ -1,0 +1,18 @@
+1) Il file mosti.mat contiene il data set mosti di dimensioni 98 oggetti x 6 variabili (caricando il
+file si avranno nel workspace le variabili: mosti.mat (dati); nameobj_mosti (labels oggetti);
+namevar_mosti (labels variabili) e classid_v (vettore di assegnazione alle diverse classi di
+varietali). I 98 oggetti sono dei campioni di mosti ottenuti con uve di diversi varietali
+Ancellotta (A), Montepulciano (M), Lambrusco Pugliese (LP), Sangiovese (S) e Nero
+d’Avola (N) in due diverse annate 2000 (_00 alla fine del nome) e 2001 (_01 alla fine del
+nome). Le sei variabili rappresentano le aree in % di alcuni antociani determinati tramite
+HPLC, delfinidina (DPD%), cianidina (CYD%), petunidina (PTD%), peonidina (PND%),
+malvidina (MVD%) e il rapporto tra antociani liberi e antociani legati (R lib/lrg). Si vuole
+vedere se è possibile distinguere i diversi varietali e se l’anno di produzione è un fattore di
+minore variabilità rispetto al varietale.
+Applica l’analisi PCA a questo set di dati come metodo esplorativo per vedere quali
+somiglianze/differenze vi sono tra i campioni e a quali variabili sono dovute. I campioni si
+distinguono sia in base al varietale che all’annata o solo per uno dei due fattori? Quali sono
+le variabili che distinguono meglio i campioni di varietali diversi?
+
+2) Suddividi i dati in un set di training ed uno di test (per la validazione esterna) e applica sia
+SIMCA che PLS-DA per vedere se è possibile classificare i diversi varietali, usa i dati delle 2 annate insieme.

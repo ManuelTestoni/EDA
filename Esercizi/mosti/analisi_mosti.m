@@ -984,40 +984,73 @@ optFinal.preprocessing = {preprocess('default','autoscale') preprocess('default'
 modelPLSDA_final = plsda(Xds_train, Yds_train, bestLV, optFinal);
 
 % --- 6.5 Predizione su Training e Test ---
-% Calcolare predizioni manualmente usando i loadings del modello
-% Formula PLS: Y_pred = X * W * inv(P'W) * Q' = T * Q'
-
-% Estrarre X-loadings (P) - loads{1}
-if isa(modelPLSDA_final.loads{1}, 'dataset')
-    P_plsda = modelPLSDA_final.loads{1}.data;
-else
-    P_plsda = modelPLSDA_final.loads{1};
+% Ispezionare struttura completa del modello per capire dove sono P e Q
+fprintf('  === Ispezione struttura modello PLS-DA ===\n');
+fprintf('  Campi principali del modello:\n');
+campi = fieldnames(modelPLSDA_final);
+for i = 1:length(campi)
+    fprintf('    - %s\n', campi{i});
 end
 
-% Estrarre X-weights (W) - loads{2}
+fprintf('\n  Campi in detail:\n');
+if isfield(modelPLSDA_final, 'detail')
+    campi_detail = fieldnames(modelPLSDA_final.detail);
+    for i = 1:length(campi_detail)
+        fprintf('    - detail.%s\n', campi_detail{i});
+    end
+end
+
+fprintf('\n  Numero elementi in loads: %d\n', length(modelPLSDA_final.loads));
+for idx = 1:length(modelPLSDA_final.loads)
+    if isa(modelPLSDA_final.loads{idx}, 'dataset')
+        fprintf('    loads{%d} = dataset %dx%d\n', idx, ...
+            size(modelPLSDA_final.loads{idx}.data, 1), ...
+            size(modelPLSDA_final.loads{idx}.data, 2));
+    else
+        fprintf('    loads{%d} = %dx%d\n', idx, ...
+            size(modelPLSDA_final.loads{idx}, 1), ...
+            size(modelPLSDA_final.loads{idx}, 2));
+    end
+end
+
+% Strategia alternativa: usare i dati grezzi per calcolare le predizioni
+% loads{1} = T (scores 69×3)
+% loads{2} = W (weights 6×3)
+% Devo calcolare P da X e T: X = T*P' => P' = T\X => P = (T\X)'
+
+fprintf('\n  Calcolo manuale di P e Q dai dati...\n');
+
+% Estrarre T (scores training)
+if isa(modelPLSDA_final.loads{1}, 'dataset')
+    T_train = modelPLSDA_final.loads{1}.data;
+else
+    T_train = modelPLSDA_final.loads{1};
+end
+
+% Estrarre W (weights)
 if isa(modelPLSDA_final.loads{2}, 'dataset')
     W_plsda = modelPLSDA_final.loads{2}.data;
 else
     W_plsda = modelPLSDA_final.loads{2};
 end
 
-% Estrarre Y-loadings (Q) - loads{3}
-if isa(modelPLSDA_final.loads{3}, 'dataset')
-    Q_plsda = modelPLSDA_final.loads{3}.data;
-else
-    Q_plsda = modelPLSDA_final.loads{3};
-end
+% Calcolare P (X-loadings) da: X_auto = T*P' + E => P = (T\X_auto)'
+P_plsda = (T_train \ X_train_auto)';
+fprintf('    P calcolato: %dx%d\n', size(P_plsda,1), size(P_plsda,2));
 
-% Calcolare scores per training: T_train = X_train_auto * W * inv(P'W)
-% X_train_auto è già autoscalato
-R_plsda = W_plsda * inv(P_plsda' * W_plsda);
-T_train = X_train_auto * R_plsda;
+% Calcolare Q (Y-loadings) da: Y_dummy = T*Q' + F => Q = (T\Y_dummy)'
+Q_plsda = (T_train \ Y_train_dummy)';
+fprintf('    Q calcolato: %dx%d\n', size(Q_plsda,1), size(Q_plsda,2));
 
 % Predizione training: Y_pred_train = T_train * Q'
 Y_pred_train = T_train * Q_plsda';
 
-% Calcolare scores per test: T_test = X_test_auto * R
+% Per test: T_test = X_test_auto * W * inv(P'*W)
+R_plsda = W_plsda / (P_plsda' * W_plsda);
 T_test = X_test_auto * R_plsda;
+
+% Predizione test: Y_pred_test = T_test * Q'
+Y_pred_test = T_test * Q_plsda';
 
 % Predizione test: Y_pred_test = T_test * Q'
 Y_pred_test = T_test * Q_plsda';

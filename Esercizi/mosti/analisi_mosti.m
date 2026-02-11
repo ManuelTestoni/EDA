@@ -98,6 +98,186 @@ for k = 1:nClassi
 end
 
 %% ========================================================================
+%  SEZIONE 1.5 — ANALISI ESPLORATIVA DEI DATI (EDA)
+%  ========================================================================
+fprintf('\n--- SEZIONE 1.5: Analisi Esplorativa dei Dati (EDA) ---\n');
+
+% ---- 1.5.1 FREQUENCY HISTOGRAM ----
+% Istogrammi di frequenza per ogni variabile
+fprintf('  Generazione istogrammi di frequenza...\n');
+fig_hist = figure('Visible','off','Position',[100 100 1200 800]);
+for j = 1:nVar
+    subplot(2, 3, j);
+    histogram(mosti(:, j), 15, 'FaceColor', [0.3 0.6 0.8], 'EdgeColor', 'k');
+    xlabel(namevar_mosti{j});
+    ylabel('Frequenza');
+    title(['Histogram - ' namevar_mosti{j}]);
+    grid on;
+end
+sgtitle('Frequency Histograms - Tutte le Variabili');
+savePlot(fig_hist, 'EDA_01_histograms');
+fprintf('  Salvato: EDA_01_histograms.png\n');
+
+% ---- 1.5.2 BOX PLOT ----
+% Box plot per tutte le variabili (per confrontare distribuzioni)
+fprintf('  Generazione box plot...\n');
+fig_box1 = figure('Visible','off','Position',[100 100 1000 600]);
+boxplot(mosti, 'Labels', namevar_mosti);
+ylabel('Valore');
+title('Box Plot - Confronto tra Variabili');
+grid on;
+xtickangle(45);
+savePlot(fig_box1, 'EDA_02_boxplot_variabili');
+fprintf('  Salvato: EDA_02_boxplot_variabili.png\n');
+
+% Box plot per ogni classe varietale (media delle variabili)
+fig_box2 = figure('Visible','off','Position',[100 100 1200 800]);
+for j = 1:nVar
+    subplot(2, 3, j);
+    data_per_classe = [];
+    gruppi = [];
+    for k = 1:nClassi
+        idx = classid_v == k;
+        data_per_classe = [data_per_classe; mosti(idx, j)];
+        gruppi = [gruppi; k * ones(sum(idx), 1)];
+    end
+    boxplot(data_per_classe, gruppi);
+    set(gca, 'XTickLabel', sigleClassi);
+    ylabel(namevar_mosti{j});
+    title(['Box Plot - ' namevar_mosti{j}]);
+    grid on;
+end
+sgtitle('Box Plot per Classe Varietale');
+savePlot(fig_box2, 'EDA_03_boxplot_per_classe');
+fprintf('  Salvato: EDA_03_boxplot_per_classe.png\n');
+
+% ---- 1.5.3 SCATTER PLOT ----
+% Scatter plot matrice (tutte le coppie di variabili)
+fprintf('  Generazione scatter plot matrix...\n');
+fig_scatter1 = figure('Visible','off','Position',[100 100 1200 1000]);
+% Colori per le classi
+colori_scatter = [0.894 0.102 0.110;   % rosso
+                  0.216 0.494 0.722;   % blu
+                  0.302 0.686 0.290;   % verde
+                  1.000 0.498 0.000;   % arancio
+                  0.596 0.306 0.639];  % viola
+
+% Creiamo colori per ogni campione basati sulla classe
+colori_campioni = colori_scatter(classid_v, :);
+
+% Scatter plot matrix usando gplotmatrix
+[~, ax] = gplotmatrix(mosti, [], classid_v, colori_scatter, '.o', 8, ...
+                      'on', '', namevar_mosti, namevar_mosti);
+sgtitle('Scatter Plot Matrix - Variabili per Classe');
+savePlot(fig_scatter1, 'EDA_04_scatter_matrix');
+fprintf('  Salvato: EDA_04_scatter_matrix.png\n');
+
+% Scatter plot specifici per alcune coppie di variabili rilevanti
+fig_scatter2 = figure('Visible','off','Position',[100 100 1200 400]);
+% Selezioniamo 3 coppie di variabili interessanti
+coppie = [1 2; 3 4; 2 5];  % Indici delle coppie di variabili
+for p = 1:size(coppie, 1)
+    subplot(1, 3, p);
+    hold on;
+    for k = 1:nClassi
+        idx = classid_v == k;
+        scatter(mosti(idx, coppie(p,1)), mosti(idx, coppie(p,2)), 60, ...
+                colori_scatter(k,:), 'filled', 'MarkerEdgeColor', 'k');
+    end
+    xlabel(namevar_mosti{coppie(p,1)});
+    ylabel(namevar_mosti{coppie(p,2)});
+    title([namevar_mosti{coppie(p,1)} ' vs ' namevar_mosti{coppie(p,2)}]);
+    legend(nomiClassi, 'Location', 'best', 'FontSize', 7);
+    grid on;
+    hold off;
+end
+sgtitle('Scatter Plots - Coppie di Variabili Selezionate');
+savePlot(fig_scatter2, 'EDA_05_scatter_selected');
+fprintf('  Salvato: EDA_05_scatter_selected.png\n');
+
+% ---- 1.5.4 LINE PLOT ----
+% Line plot: profilo medio per classe (tutte le variabili)
+fprintf('  Generazione line plot...\n');
+fig_line1 = figure('Visible','off','Position',[100 100 1000 600]);
+hold on;
+for k = 1:nClassi
+    idx = classid_v == k;
+    media_classe = mean(mosti(idx, :), 1);
+    plot(1:nVar, media_classe, '-o', 'Color', colori_scatter(k,:), ...
+         'LineWidth', 2, 'MarkerSize', 8, 'MarkerFaceColor', colori_scatter(k,:));
+end
+xlabel('Variabile');
+ylabel('Valore Medio');
+title('Line Plot - Profili Medi per Classe Varietale');
+set(gca, 'XTick', 1:nVar, 'XTickLabel', namevar_mosti);
+xtickangle(45);
+legend(nomiClassi, 'Location', 'best');
+grid on;
+hold off;
+savePlot(fig_line1, 'EDA_06_line_plot_medie');
+fprintf('  Salvato: EDA_06_line_plot_medie.png\n');
+
+% Line plot: profili individuali per alcune classi selezionate
+fig_line2 = figure('Visible','off','Position',[100 100 1200 800]);
+for k = 1:nClassi
+    subplot(2, 3, k);
+    idx = classid_v == k;
+    campioni_classe = mosti(idx, :);
+    hold on;
+    % Tutti i campioni della classe in grigio trasparente
+    for i = 1:size(campioni_classe, 1)
+        plot(1:nVar, campioni_classe(i, :), '-', 'Color', [0.7 0.7 0.7], 'LineWidth', 0.5);
+    end
+    % Media della classe in evidenza
+    media_classe = mean(campioni_classe, 1);
+    plot(1:nVar, media_classe, '-o', 'Color', colori_scatter(k,:), ...
+         'LineWidth', 3, 'MarkerSize', 8, 'MarkerFaceColor', colori_scatter(k,:));
+    xlabel('Variabile');
+    ylabel('Valore');
+    title([nomiClassi{k} ' (n=' num2str(sum(idx)) ')']);
+    set(gca, 'XTick', 1:nVar, 'XTickLabel', namevar_mosti);
+    xtickangle(45);
+    grid on;
+    hold off;
+end
+sgtitle('Line Plot - Profili Individuali e Medi per Classe');
+savePlot(fig_line2, 'EDA_07_line_plot_individuali');
+fprintf('  Salvato: EDA_07_line_plot_individuali.png\n');
+
+% Line plot: confronto tra annate per ogni classe
+fig_line3 = figure('Visible','off','Position',[100 100 1200 800]);
+for k = 1:nClassi
+    subplot(2, 3, k);
+    idx_00 = (classid_v == k) & (annata == 2000);
+    idx_01 = (classid_v == k) & (annata == 2001);
+    hold on;
+    if sum(idx_00) > 0
+        media_00 = mean(mosti(idx_00, :), 1);
+        plot(1:nVar, media_00, '-o', 'Color', [0.2 0.6 0.2], ...
+             'LineWidth', 2, 'MarkerSize', 8, 'MarkerFaceColor', [0.2 0.6 0.2]);
+    end
+    if sum(idx_01) > 0
+        media_01 = mean(mosti(idx_01, :), 1);
+        plot(1:nVar, media_01, '-s', 'Color', [0.8 0.2 0.2], ...
+             'LineWidth', 2, 'MarkerSize', 8, 'MarkerFaceColor', [0.8 0.2 0.2]);
+    end
+    xlabel('Variabile');
+    ylabel('Valore Medio');
+    title(nomiClassi{k});
+    set(gca, 'XTick', 1:nVar, 'XTickLabel', namevar_mosti);
+    xtickangle(45);
+    legend({'2000', '2001'}, 'Location', 'best');
+    grid on;
+    hold off;
+end
+sgtitle('Line Plot - Confronto Annate per Classe');
+savePlot(fig_line3, 'EDA_08_line_plot_annate');
+fprintf('  Salvato: EDA_08_line_plot_annate.png\n');
+
+fprintf('\n=== Analisi esplorativa completata ===\n');
+fprintf('  Generati 8 grafici nella cartella plots/\n\n');
+
+%% ========================================================================
 %  SEZIONE 2 — PREPROCESSING
 %  ========================================================================
 %  SCELTA: Autoscaling (mean-centering + divisione per deviazione standard)

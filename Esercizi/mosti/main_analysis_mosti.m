@@ -1,18 +1,30 @@
 %% ========================================================================
-%  MAIN_ANALYSIS.m - Classification Analysis of Olive Oil Dataset
+%  MAIN_ANALYSIS_MOSTI.m - Classification Analysis of Mosti (Grape Must) Dataset
 %  Methods: PCA (exploratory), SIMCA (class modeling), PLS-DA (discriminant)
-%  Dataset: olive_oil.xlsx (382 samples, 7 fatty acids, 5 Italian regions)
+%  Dataset: mosti.mat (98 samples, 6 anthocyanin HPLC variables, 5 grape varieties)
 %  ========================================================================
 %  This script is self-contained and does NOT require PLS Toolbox.
 %  It uses only standard MATLAB + Statistics Toolbox + the utility
 %  functions provided in the SIMCA folder.
 %
+%  Grape varieties:
+%    1 = Ancellotta (A)
+%    2 = Montepulciano (M)
+%    3 = Lambrusco Pugliese (LP)
+%    4 = Sangiovese (S)
+%    5 = Nero d'Avola (N)
+%
+%  Variables (anthocyanin HPLC areas %):
+%    DPD%, CYD%, PTD%, PND%, MVD%, R lib/lrg
+%
+%  Two vintages: 2000 and 2001 (combined for classification).
+%
 %  To run: simply execute this script in MATLAB.
-%  All plots are saved automatically in the 'plot/' folder.
+%  All plots are saved automatically in the 'plots2/' folder.
 %  ========================================================================
 clear; close all; clc;
 fprintf('============================================================\n');
-fprintf('  OLIVE OIL CLASSIFICATION ANALYSIS\n');
+fprintf('  MOSTI (GRAPE MUST) CLASSIFICATION ANALYSIS\n');
 fprintf('  SIMCA + PLS-DA | %s\n', datestr(now));
 fprintf('============================================================\n\n');
 
@@ -22,7 +34,7 @@ if isempty(basePath); basePath = pwd; end
 addpath(fullfile(basePath, 'SIMCA'));
 addpath(fullfile(basePath, 'PLS_DA'));
 
-plotDir = fullfile(basePath, 'plot');
+plotDir = fullfile(basePath, 'plots2');
 if ~exist(plotDir, 'dir'); mkdir(plotDir); end
 
 rng(42); % reproducibility
@@ -33,45 +45,121 @@ plot(0,0); drawnow; pause(0.2);
 close(hWarmup);
 set(0, 'DefaultFigurePaperPositionMode', 'auto');
 
-% Class color palette
-classColors = [0.20 0.40 0.80;   % NA - blue
-               0.85 0.20 0.20;   % SA - red
-               0.15 0.70 0.30;   % U  - green
-               0.80 0.20 0.80;   % EL - magenta
-               0.95 0.60 0.10];  % WL - orange
+% Class color palette (5 grape varieties)
+classColors = [0.20 0.40 0.80;   % A  - blue
+               0.85 0.20 0.20;   % M  - red
+               0.15 0.70 0.30;   % LP - green
+               0.80 0.20 0.80;   % S  - magenta
+               0.95 0.60 0.10];  % N  - orange
 
 %% ---- 1. DATA LOADING ----------------------------------------------------
 fprintf('[1] Loading data...\n');
-dataFile = fullfile(basePath, 'olive_oil.xlsx');
+dataFile = fullfile(basePath, 'mosti.mat');
+loadedData = load(dataFile);
 
-T = readtable(dataFile, 'Sheet', 'Sheet1');
-% Clean column names (trim whitespace)
-varNames = strtrim(T.Properties.VariableNames);
-T.Properties.VariableNames = varNames;
+% Extract variables from .mat file
+X_full = loadedData.mosti;              % 98 x 6 data matrix
 
-% Extract class labels and features
-classLabelsRaw = strtrim(T.Categorie);
-X_full = table2array(T(:, 2:end));
+% Class assignment vector
+classid_v = loadedData.classid_v;
+y_full = classid_v(:);                  % ensure column vector
 
-% Variable names (fatty acids)
-featNames = {'Palmitico','Palmitoleico','Stearico','Oleico','Linoleico','Eicosanoico','Linolenico'};
-
-% Map class labels to numeric indices
-classNames = {'NA','SA','U','EL','WL'};
-classFullNames = {'North Apulia','South Apulia','Umbria','East Liguria','West Liguria'};
-y_full = zeros(size(classLabelsRaw));
-for ic = 1:length(classNames)
-    idx = strcmp(classLabelsRaw, classNames{ic});
-    y_full(idx) = ic;
+% Sample names
+if ischar(loadedData.nameobj_mosti)
+    nameobj_mosti = cellstr(loadedData.nameobj_mosti);
+else
+    nameobj_mosti = loadedData.nameobj_mosti;
 end
+nameobj_mosti = strtrim(nameobj_mosti);
+
+% Variable names
+if ischar(loadedData.namevar_mosti)
+    namevar_mosti = cellstr(loadedData.namevar_mosti);
+else
+    namevar_mosti = loadedData.namevar_mosti;
+end
+namevar_mosti = strtrim(namevar_mosti);
+
+% Use names from file; provide fallback
+if length(namevar_mosti) == size(X_full, 2)
+    featNames = namevar_mosti(:)';
+else
+    featNames = {'DPD%','CYD%','PTD%','PND%','MVD%','R lib/lrg'};
+end
+
+% Class definitions
+classNames     = {'A','M','LP','S','N'};
+classFullNames = {'Ancellotta','Montepulciano','Lambrusco Pugliese','Sangiovese','Nero d''Avola'};
 
 [N_total, M_vars] = size(X_full);
 nClasses = length(classNames);
+
+% Extract vintage info from sample names
+annata = zeros(N_total, 1);
+for i = 1:N_total
+    nome = nameobj_mosti{i};
+    if contains(nome, '_00') || endsWith(nome, '00')
+        annata(i) = 2000;
+    elseif contains(nome, '_01') || endsWith(nome, '01')
+        annata(i) = 2001;
+    end
+end
+
 fprintf('   Samples: %d | Variables: %d | Classes: %d\n', N_total, M_vars, nClasses);
 for ic = 1:nClasses
-    fprintf('   Class %d (%s): %d samples\n', ic, classFullNames{ic}, sum(y_full==ic));
+    n00 = sum(y_full == ic & annata == 2000);
+    n01 = sum(y_full == ic & annata == 2001);
+    fprintf('   Class %d (%s): %d samples  [2000: %d | 2001: %d]\n', ...
+        ic, classFullNames{ic}, sum(y_full==ic), n00, n01);
 end
 fprintf('\n');
+
+%% ---- 1b. PREPROCESSING ANALYSIS ----------------------------------------
+fprintf('[1b] Preprocessing Analysis...\n');
+
+% Preprocessing strategy: AUTOSCALING (mean-centering + unit variance scaling)
+% Motivation: the 6 anthocyanin variables share the same unit (area %)
+% but have very different ranges (e.g. MVD% >> CYD%). Without scaling,
+% high-variance variables would dominate PCA and classification models.
+% Autoscaling gives equal weight to all variables.
+
+preprocessing_method = 'Autoscaling (Mean-Centering + Unit Variance)';
+
+% Compute raw statistics
+raw_means = mean(X_full);
+raw_stds  = std(X_full);
+raw_mins  = min(X_full);
+raw_maxs  = max(X_full);
+raw_ranges = raw_maxs - raw_mins;
+
+fprintf('   Preprocessing: %s\n', preprocessing_method);
+fprintf('   Raw Variable Statistics:\n');
+fprintf('   %-12s  Mean     Std      Min      Max      Range\n', 'Variable');
+for iv = 1:M_vars
+    fprintf('   %-12s  %7.2f  %7.2f  %7.2f  %7.2f  %7.2f\n', ...
+        featNames{iv}, raw_means(iv), raw_stds(iv), raw_mins(iv), raw_maxs(iv), raw_ranges(iv));
+end
+
+% Plot: Raw vs Autoscaled comparison
+X_auto_preview = (X_full - raw_means) ./ raw_stds;
+fig_prepr = figure('Position',[100 100 1200 500]);
+subplot(1,2,1);
+boxplot(X_full);
+set(gca, 'XTickLabel', featNames); xtickangle(30);
+ylab = ylabel('Raw Value (area %)'); title('Raw Data');
+grid on;
+subplot(1,2,2);
+boxplot(X_auto_preview);
+set(gca, 'XTickLabel', featNames); xtickangle(30);
+ylab = ylabel('Autoscaled Value'); title('After Autoscaling');
+grid on;
+try sgtitle(sprintf('Preprocessing: %s', preprocessing_method), 'FontSize', 14); ...
+catch; annotation('textbox',[0.2 0.96 0.6 0.04],'String',sprintf('Preprocessing: %s', preprocessing_method),'FontSize',14,'FontWeight','bold','HorizontalAlignment','center','EdgeColor','none'); end
+drawnow; pause(0.1);
+saveas(fig_prepr, fullfile(plotDir, '01b_preprocessing_comparison.png'));
+close(fig_prepr);
+
+fprintf('   Preprocessing plot saved.\n\n');
 
 %% ---- 2. EXPLORATORY DATA ANALYSIS (EDA) --------------------------------
 fprintf('[2] Exploratory Data Analysis...\n');
@@ -80,17 +168,17 @@ fprintf('[2] Exploratory Data Analysis...\n');
 fig1 = figure('Position',[100 100 900 500]);
 boxplot(X_full);
 set(gca, 'XTickLabel', featNames);
-ylabel('Value'); title('Distribution of Fatty Acid Variables');
+ylabel('Area (%)'); title('Distribution of Anthocyanin Variables');
 xtickangle(30);
 grid on;
 drawnow; pause(0.1);
 saveas(fig1, fullfile(plotDir, '01_raw_data_boxplot.png'));
 close(fig1);
 
-% ---- 2.2 Boxplot per class (parallel coordinates alternative) ----
+% ---- 2.2 Boxplot per class ----
 fig2 = figure('Position',[100 100 1200 600]);
 for iv = 1:M_vars
-    subplot(2, 4, iv);
+    subplot(2, 3, iv);
     data_var = [];
     groups_var = [];
     for ic = 1:nClasses
@@ -101,13 +189,34 @@ for iv = 1:M_vars
     boxplot(data_var, groups_var);
     set(gca, 'XTickLabel', classNames);
     title(featNames{iv}, 'FontSize', 10);
-    ylabel('Value');
+    ylabel('Area (%)');
     grid on;
 end
-try sgtitle('Fatty Acid Distribution by Class', 'FontSize', 14); catch; annotation('textbox',[0.3 0.96 0.4 0.04],'String','Fatty Acid Distribution by Class','FontSize',14,'FontWeight','bold','HorizontalAlignment','center','EdgeColor','none'); end
+try sgtitle('Anthocyanin Distribution by Grape Variety', 'FontSize', 14); catch; annotation('textbox',[0.2 0.96 0.6 0.04],'String','Anthocyanin Distribution by Grape Variety','FontSize',14,'FontWeight','bold','HorizontalAlignment','center','EdgeColor','none'); end
 drawnow; pause(0.1);
 saveas(fig2, fullfile(plotDir, '02_boxplot_by_class.png'));
 close(fig2);
+
+% ---- 2.2b Boxplot per vintage (to assess vintage effect) ----
+fig2b = figure('Position',[100 100 1200 600]);
+for iv = 1:M_vars
+    subplot(2, 3, iv);
+    data_var = [];
+    groups_var = [];
+    for ia = [2000, 2001]
+        vals = X_full(annata==ia, iv);
+        data_var = [data_var; vals];
+        groups_var = [groups_var; ia*ones(length(vals),1)];
+    end
+    boxplot(data_var, groups_var);
+    title(featNames{iv}, 'FontSize', 10);
+    ylabel('Area (%)');
+    grid on;
+end
+try sgtitle('Anthocyanin Distribution by Vintage (2000 vs 2001)', 'FontSize', 14); catch; annotation('textbox',[0.15 0.96 0.7 0.04],'String','Anthocyanin Distribution by Vintage (2000 vs 2001)','FontSize',14,'FontWeight','bold','HorizontalAlignment','center','EdgeColor','none'); end
+drawnow; pause(0.1);
+saveas(fig2b, fullfile(plotDir, '02b_boxplot_by_vintage.png'));
+close(fig2b);
 
 % ---- 2.3 Correlation matrix ----
 fig3 = figure('Position',[100 100 650 550]);
@@ -116,7 +225,7 @@ imagesc(corrMat);
 colorbar; colormap(jet);
 set(gca, 'XTick', 1:M_vars, 'XTickLabel', featNames, 'YTick', 1:M_vars, 'YTickLabel', featNames);
 xtickangle(30);
-title('Correlation Matrix of Fatty Acids');
+title('Correlation Matrix of Anthocyanin Variables');
 % Add text annotations
 for ii = 1:M_vars
     for jj = 1:M_vars
@@ -163,7 +272,7 @@ drawnow; pause(0.1);
 saveas(fig4, fullfile(plotDir, '04_pca_scree_plot.png'));
 close(fig4);
 
-% ---- 2.6 Score plots ----
+% ---- 2.6 Score plots (colored by variety) ----
 fig5 = figure('Position',[100 100 1100 500]);
 subplot(1,2,1);
 hold on;
@@ -173,7 +282,7 @@ for ic = 1:nClasses
 end
 xlabel(sprintf('PC1 (%.1f%%)', explainedVar(1)));
 ylabel(sprintf('PC2 (%.1f%%)', explainedVar(2)));
-title('PCA Score Plot: PC1 vs PC2');
+title('PCA Score Plot: PC1 vs PC2 (by Variety)');
 legend(classFullNames, 'Location','best'); grid on;
 
 subplot(1,2,2);
@@ -184,11 +293,42 @@ for ic = 1:nClasses
 end
 xlabel(sprintf('PC1 (%.1f%%)', explainedVar(1)));
 ylabel(sprintf('PC3 (%.1f%%)', explainedVar(3)));
-title('PCA Score Plot: PC1 vs PC3');
+title('PCA Score Plot: PC1 vs PC3 (by Variety)');
 legend(classFullNames, 'Location','best'); grid on;
 drawnow; pause(0.1);
-saveas(fig5, fullfile(plotDir, '05_pca_scores.png'));
+saveas(fig5, fullfile(plotDir, '05_pca_scores_variety.png'));
 close(fig5);
+
+% ---- 2.6b Score plots colored by vintage ----
+fig5v = figure('Position',[100 100 1100 500]);
+vintageColors = [0.2 0.6 0.2; 0.8 0.3 0.1]; % 2000=green, 2001=brown
+vintageLabels = {'2000','2001'};
+subplot(1,2,1);
+hold on;
+for iv = 1:2
+    yr = [2000, 2001];
+    idx = annata == yr(iv);
+    scatter(scores_pca(idx,1), scores_pca(idx,2), 40, vintageColors(iv,:), 'filled', 'MarkerEdgeColor','k','LineWidth',0.3);
+end
+xlabel(sprintf('PC1 (%.1f%%)', explainedVar(1)));
+ylabel(sprintf('PC2 (%.1f%%)', explainedVar(2)));
+title('PCA Score Plot: PC1 vs PC2 (by Vintage)');
+legend(vintageLabels, 'Location','best'); grid on;
+
+subplot(1,2,2);
+hold on;
+for iv = 1:2
+    yr = [2000, 2001];
+    idx = annata == yr(iv);
+    scatter(scores_pca(idx,1), scores_pca(idx,3), 40, vintageColors(iv,:), 'filled', 'MarkerEdgeColor','k','LineWidth',0.3);
+end
+xlabel(sprintf('PC1 (%.1f%%)', explainedVar(1)));
+ylabel(sprintf('PC3 (%.1f%%)', explainedVar(3)));
+title('PCA Score Plot: PC1 vs PC3 (by Vintage)');
+legend(vintageLabels, 'Location','best'); grid on;
+drawnow; pause(0.1);
+saveas(fig5v, fullfile(plotDir, '05b_pca_scores_vintage.png'));
+close(fig5v);
 
 % ---- 2.7 3D Score plot ----
 fig5b = figure('Position',[100 100 700 600]);
@@ -200,7 +340,7 @@ end
 xlabel(sprintf('PC1 (%.1f%%)', explainedVar(1)));
 ylabel(sprintf('PC2 (%.1f%%)', explainedVar(2)));
 zlabel(sprintf('PC3 (%.1f%%)', explainedVar(3)));
-title('PCA 3D Score Plot');
+title('PCA 3D Score Plot (by Variety)');
 legend(classFullNames, 'Location','best');
 grid on; view(30,25);
 drawnow; pause(0.1);
@@ -210,11 +350,14 @@ close(fig5b);
 % ---- 2.8 Loading plot ----
 fig6 = figure('Position',[100 100 900 400]);
 subplot(1,2,1);
-bar(loadings_pca(:,1:3));
+nLoadPC = min(3, nPC_max);
+bar(loadings_pca(:,1:nLoadPC));
 set(gca, 'XTick', 1:M_vars, 'XTickLabel', featNames);
 xtickangle(30); ylabel('Loading Value');
-title('PCA Loadings (PC1-PC3)');
-legend({'PC1','PC2','PC3'}, 'Location','best'); grid on;
+title(sprintf('PCA Loadings (PC1-PC%d)', nLoadPC));
+pcLabels = cell(1, nLoadPC);
+for ipc = 1:nLoadPC; pcLabels{ipc} = sprintf('PC%d', ipc); end
+legend(pcLabels, 'Location','best'); grid on;
 
 subplot(1,2,2);
 hold on;
@@ -230,6 +373,30 @@ th = 0:0.01:2*pi; plot(cos(th), sin(th), '--', 'Color', [0.7 0.7 0.7]);
 drawnow; pause(0.1);
 saveas(fig6, fullfile(plotDir, '07_pca_loadings.png'));
 close(fig6);
+
+% ---- 2.9 Biplot (scores + loadings on same plot) ----
+fig_biplot = figure('Position',[100 100 800 650]);
+hold on;
+% Normalize scores to [-1, 1] range for overlay
+sc_norm = scores_pca(:,1:2) ./ max(abs(scores_pca(:,1:2)));
+for ic = 1:nClasses
+    idx = y_full == ic;
+    scatter(sc_norm(idx,1), sc_norm(idx,2), 30, classColors(ic,:), 'filled', 'MarkerFaceAlpha', 0.5);
+end
+% Overlay loadings as arrows
+for iv = 1:M_vars
+    quiver(0, 0, loadings_pca(iv,1), loadings_pca(iv,2), 'k', 'LineWidth', 2, 'MaxHeadSize', 0.3);
+    text(loadings_pca(iv,1)*1.12, loadings_pca(iv,2)*1.12, featNames{iv}, ...
+        'FontSize', 10, 'FontWeight', 'bold', 'Color', [0.1 0.1 0.1]);
+end
+xlabel(sprintf('PC1 (%.1f%%)', explainedVar(1)));
+ylabel(sprintf('PC2 (%.1f%%)', explainedVar(2)));
+title('PCA Biplot (Scores + Loadings)');
+legend(classFullNames, 'Location','best');
+grid on; axis equal;
+drawnow; pause(0.1);
+saveas(fig_biplot, fullfile(plotDir, '07b_pca_biplot.png'));
+close(fig_biplot);
 
 fprintf('   EDA plots saved.\n\n');
 
@@ -264,7 +431,7 @@ fprintf('\n');
 fprintf('[4] SIMCA Analysis...\n');
 fprintf('   Running cross-validation...\n');
 
-maxPC_simca = 6; % max number of PCs to evaluate
+maxPC_simca = min(5, M_vars - 1); % max PCs to evaluate (5 for 6 variables)
 nSegCV = 5;      % number of CV segments (venetian blinds)
 conf_level = 0.95;
 
@@ -523,7 +690,7 @@ X_test_sc  = (X_test  - mx_tr) ./ sx_tr;
 my_tr = mean(Y_train);
 Y_train_mc = Y_train - my_tr;
 
-maxLV = 10;  % max latent variables to test
+maxLV = min(M_vars, 6);  % max latent variables to test (bounded by number of variables)
 
 % ---- 5.1 Cross-validation (venetian blinds, 5 segments) ----
 fprintf('   Running PLS-DA cross-validation...\n');
@@ -658,7 +825,7 @@ end
 fprintf('   Overall accuracy: %.1f%%\n\n', acc_ts_p*100);
 
 % ---- 5.6 Plot: Y predicted vs samples (training) ----
-fig_ytr = figure('Position',[100 100 1100 800]);
+fig_ytr = figure('Position',[100 100 1100 900]);
 for ic = 1:nClasses
     subplot(nClasses, 1, ic);
     hold on;
@@ -679,12 +846,14 @@ for ic = 1:nClasses
     grid on;
     if ic == nClasses; xlabel('Sample #'); end
 end
+try sgtitle(sprintf('PLS-DA | Preprocessing: Autoscaling | LVs = %d | Y: Mean-Centered Dummy', optLV), 'FontSize', 11, 'FontWeight','bold'); ...
+catch; annotation('textbox',[0.05 0.96 0.9 0.04],'String',sprintf('PLS-DA | Preprocessing: Autoscaling | LVs = %d | Y: Mean-Centered Dummy', optLV),'FontSize',11,'FontWeight','bold','HorizontalAlignment','center','EdgeColor','none'); end
 drawnow; pause(0.1);
 saveas(fig_ytr, fullfile(plotDir, '16_plsda_ypred_train.png'));
 close(fig_ytr);
 
 % ---- 5.7 Plot: Y predicted vs samples (test) ----
-fig_yts = figure('Position',[100 100 1100 800]);
+fig_yts = figure('Position',[100 100 1100 900]);
 for ic = 1:nClasses
     subplot(nClasses, 1, ic);
     hold on;
@@ -705,6 +874,8 @@ for ic = 1:nClasses
     grid on;
     if ic == nClasses; xlabel('Sample #'); end
 end
+try sgtitle(sprintf('PLS-DA | Preprocessing: Autoscaling | LVs = %d | Y: Mean-Centered Dummy', optLV), 'FontSize', 11, 'FontWeight','bold'); ...
+catch; annotation('textbox',[0.05 0.96 0.9 0.04],'String',sprintf('PLS-DA | Preprocessing: Autoscaling | LVs = %d | Y: Mean-Centered Dummy', optLV),'FontSize',11,'FontWeight','bold','HorizontalAlignment','center','EdgeColor','none'); end
 drawnow; pause(0.1);
 saveas(fig_yts, fullfile(plotDir, '17_plsda_ypred_test.png'));
 close(fig_yts);
@@ -795,13 +966,177 @@ close(fig_sum_p);
 
 fprintf('   PLS-DA plots saved.\n\n');
 
+%% ---- 5b. APPLICABILITY DOMAIN ------------------------------------------
+fprintf('[5b] Applicability Domain Analysis...\n');
+fprintf('     Checking if test samples fall within the training domain.\n');
+
+% Method: Leverage-based Applicability Domain (Hat matrix)
+% The leverage h_i = x_i' * (X_train' * X_train)^{-1} * x_i measures
+% how far each sample is from the training centroid in the model space.
+% Warning threshold: h* = 3 * (p+1) / n_train (Williams plot convention)
+
+% Using autoscaled data (same scaling as PLS-DA)
+XtX_inv = inv(X_train_sc' * X_train_sc);
+
+% Leverage for training samples
+h_train = zeros(size(X_train_sc, 1), 1);
+for i = 1:size(X_train_sc, 1)
+    h_train(i) = X_train_sc(i,:) * XtX_inv * X_train_sc(i,:)';
+end
+
+% Leverage for test samples
+h_test = zeros(size(X_test_sc, 1), 1);
+for i = 1:size(X_test_sc, 1)
+    h_test(i) = X_test_sc(i,:) * XtX_inv * X_test_sc(i,:)';
+end
+
+% Warning leverage threshold
+h_star = 3 * (M_vars + 1) / size(X_train_sc, 1);
+
+% Standardized residuals (PLS-DA) for Williams plot
+Ypred_train_full = X_train_sc * plsda_final.Bpls + my_tr;
+Ypred_test_full  = X_test_sc  * plsda_final.Bpls + my_tr;
+
+% Use residual of assigned class
+res_train = zeros(size(X_train_sc, 1), 1);
+for i = 1:length(y_train)
+    res_train(i) = Y_train(i, y_train(i)) - Ypred_train_full(i, y_train(i));
+end
+res_test = zeros(size(X_test_sc, 1), 1);
+for i = 1:length(y_test)
+    res_test(i) = Y_test(i, y_test(i)) - Ypred_test_full(i, y_test(i));
+end
+
+sigma_res = std(res_train);
+std_res_train = res_train / sigma_res;
+std_res_test  = res_test  / sigma_res;
+
+n_test_outside = sum(h_test > h_star);
+n_test_total = length(h_test);
+fprintf('   Leverage threshold (h*): %.4f\n', h_star);
+fprintf('   Test samples outside AD: %d / %d (%.1f%%)\n', ...
+    n_test_outside, n_test_total, 100*n_test_outside/n_test_total);
+
+% ---- Williams Plot (Leverage vs Standardized Residuals) ----
+fig_ad = figure('Position',[100 100 1000 500]);
+subplot(1,2,1);
+hold on;
+for ic = 1:nClasses
+    idx_tr = y_train == ic;
+    scatter(h_train(idx_tr), std_res_train(idx_tr), 30, classColors(ic,:), 'o', 'LineWidth', 1);
+end
+for ic = 1:nClasses
+    idx_ts = y_test == ic;
+    scatter(h_test(idx_ts), std_res_test(idx_ts), 50, classColors(ic,:), 'd', 'filled', 'MarkerEdgeColor', 'k');
+end
+xl_ad = xlim; yl_ad = ylim;
+plot([h_star h_star], [-4 4], '--r', 'LineWidth', 1.5);
+plot(xl_ad, [3 3], ':k', 'LineWidth', 1); plot(xl_ad, [-3 -3], ':k', 'LineWidth', 1);
+text(h_star*1.02, 3.5, sprintf('h*=%.3f', h_star), 'Color', 'r', 'FontSize', 8);
+xlabel('Leverage (h_i)'); ylabel('Standardized Residual');
+title('Williams Plot - Applicability Domain');
+legendEntries_ad = cell(1, 2*nClasses);
+for jc = 1:nClasses
+    legendEntries_ad{jc} = sprintf('%s (train)', classNames{jc});
+    legendEntries_ad{nClasses+jc} = sprintf('%s (test)', classNames{jc});
+end
+legend(legendEntries_ad, 'Location','best', 'FontSize', 7);
+grid on;
+
+% ---- Leverage bar chart for test samples ----
+subplot(1,2,2);
+bar_colors = zeros(n_test_total, 3);
+for i = 1:n_test_total
+    bar_colors(i,:) = classColors(y_test(i), :);
+end
+bh = bar(h_test, 'FaceColor', 'flat');
+bh.CData = bar_colors;
+hold on;
+plot(xlim, [h_star h_star], '--r', 'LineWidth', 1.5);
+text(n_test_total*0.7, h_star*1.1, sprintf('h*=%.3f', h_star), 'Color', 'r', 'FontSize', 9);
+xlabel('Test Sample Index'); ylabel('Leverage');
+title(sprintf('Test Set Leverage (%d/%d outside AD)', n_test_outside, n_test_total));
+grid on;
+
+drawnow; pause(0.1);
+saveas(fig_ad, fullfile(plotDir, '24_applicability_domain.png'));
+close(fig_ad);
+
+% ---- Hotelling T2 + Q for global PCA-based AD ----
+% Build global PCA model on training set (autoscaled)
+nPC_ad = optLV; % use same complexity as PLS-DA
+[~, S_ad, V_ad] = svd(X_train_sc, 'econ');
+P_ad = V_ad(:, 1:nPC_ad);
+lambda_ad = diag(S_ad).^2 / (size(X_train_sc,1) - 1);
+
+% Training T2 and Q
+T_train_ad = X_train_sc * P_ad;
+lam_diag = diag(lambda_ad(1:nPC_ad));
+T2_train = diag(T_train_ad * inv(lam_diag) * T_train_ad');
+E_train_ad = X_train_sc - T_train_ad * P_ad';
+Q_train = sum(E_train_ad.^2, 2);
+
+% Test T2 and Q
+T_test_ad = X_test_sc * P_ad;
+T2_test = diag(T_test_ad * inv(lam_diag) * T_test_ad');
+E_test_ad = X_test_sc - T_test_ad * P_ad';
+Q_test = sum(E_test_ad.^2, 2);
+
+% Limits
+N_ad = size(X_train_sc, 1);
+A_ad = nPC_ad;
+try F_ad = finv(0.95, A_ad, N_ad - A_ad); catch; z=sqrt(2)*erfinv(0.9); F_ad=z; end
+T2_lim = A_ad * (N_ad - 1) / (N_ad - A_ad) * F_ad;
+if length(lambda_ad) > nPC_ad
+    th1 = sum(lambda_ad(nPC_ad+1:end)); th2 = sum(lambda_ad(nPC_ad+1:end).^2); th3 = sum(lambda_ad(nPC_ad+1:end).^3);
+    h0_q = 1 - 2*th1*th3/(3*th2^2); if h0_q < 0.001; h0_q = 0.001; end
+    ca_q = sqrt(2)*erfinv(0.9);
+    Q_lim = th1*(1 + ca_q*sqrt(2*th2*h0_q^2)/th1 + th2*h0_q*(h0_q-1)/th1^2)^(1/h0_q);
+else
+    Q_lim = max(Q_train)*1.5;
+end
+
+fig_ad2 = figure('Position',[100 100 800 600]);
+hold on;
+for ic = 1:nClasses
+    idx_tr = y_train == ic;
+    scatter(T2_train(idx_tr)/T2_lim, Q_train(idx_tr)/Q_lim, 30, classColors(ic,:), 'o', 'LineWidth', 1);
+end
+for ic = 1:nClasses
+    idx_ts = y_test == ic;
+    scatter(T2_test(idx_ts)/T2_lim, Q_test(idx_ts)/Q_lim, 60, classColors(ic,:), 'd', 'filled', 'MarkerEdgeColor','k');
+end
+% AD boundary: ellipse at 1,1
+theta_el = 0:0.01:2*pi;
+plot(cos(theta_el), sin(theta_el), '-r', 'LineWidth', 1.5);
+plot([1 1], ylim, ':r', 'LineWidth', 1);
+plot(xlim, [1 1], ':r', 'LineWidth', 1);
+xlabel('T^2 / T^2_{lim}'); ylabel('Q / Q_{lim}');
+title(sprintf('Applicability Domain: T^2 vs Q (PCA %d PCs)', nPC_ad));
+legendEntries_ad2 = cell(1, 2*nClasses);
+for jc = 1:nClasses
+    legendEntries_ad2{jc} = sprintf('%s (train)', classNames{jc});
+    legendEntries_ad2{nClasses+jc} = sprintf('%s (test)', classNames{jc});
+end
+legend(legendEntries_ad2, 'Location','best', 'FontSize', 7);
+grid on;
+drawnow; pause(0.1);
+saveas(fig_ad2, fullfile(plotDir, '25_applicability_domain_T2Q.png'));
+close(fig_ad2);
+
+% Count test samples outside T2/Q domain
+n_outside_T2Q = sum(T2_test/T2_lim > 1 | Q_test/Q_lim > 1);
+fprintf('   Test samples outside T2/Q domain: %d / %d (%.1f%%)\n', ...
+    n_outside_T2Q, n_test_total, 100*n_outside_T2Q/n_test_total);
+fprintf('   Applicability Domain plots saved.\n\n');
+
 %% ---- 6. COMPARISON SUMMARY ---------------------------------------------
 fprintf('[6] Final Comparison...\n\n');
-fprintf('   %-20s  SIMCA     PLS-DA\n', '');
-fprintf('   %-20s  --------  --------\n', '');
-fprintf('   %-20s  %.1f%%     %.1f%%\n', 'Train Accuracy', acc_tr_s*100, acc_tr_p*100);
-fprintf('   %-20s  %.1f%%     %.1f%%\n', 'Test Accuracy', acc_ts_s*100, acc_ts_p*100);
-fprintf('   %-20s  ', 'Complexity');
+fprintf('   %-25s  SIMCA     PLS-DA\n', '');
+fprintf('   %-25s  --------  --------\n', '');
+fprintf('   %-25s  %.1f%%     %.1f%%\n', 'Train Accuracy', acc_tr_s*100, acc_tr_p*100);
+fprintf('   %-25s  %.1f%%     %.1f%%\n', 'Test Accuracy', acc_ts_s*100, acc_ts_p*100);
+fprintf('   %-25s  ', 'Complexity');
 fprintf('%s  ', sprintf('%dPC', optPC_simca));
 fprintf('  %dLV\n', optLV);
 
@@ -840,7 +1175,12 @@ save(fullfile(plotDir, 'analysis_results.mat'), ...
     'sens_tr_p','spec_tr_p','eff_tr_p','acc_tr_p', ...
     'sens_ts_p','spec_ts_p','eff_ts_p','acc_ts_p', ...
     'classNames','classFullNames','featNames', ...
-    'explainedVar','dpow','VIP','rmsecv','rmsep_pls');
+    'explainedVar','dpow','VIP','rmsecv','rmsep_pls', ...
+    'nameobj_mosti','annata', ...
+    'h_train','h_test','h_star', ...
+    'T2_train','T2_test','T2_lim', ...
+    'Q_train','Q_test','Q_lim', ...
+    'std_res_train','std_res_test');
 
 fprintf('\n============================================================\n');
 fprintf('  ANALYSIS COMPLETE\n');
@@ -855,11 +1195,6 @@ fprintf('============================================================\n');
 
 function model = build_simca_model(X, y, ncomp_vec, cl)
 % Build SIMCA models (one PCA per class) without PLS Toolbox dependency
-% X:          [N x M] data matrix
-% y:          [N x 1] class vector (integers 1..nClasses)
-% ncomp_vec:  [nClasses x 1] number of PCs per class
-% cl:         confidence level (e.g. 0.95)
-
     nClasses = max(y);
     [nsamp, nvar] = size(X);
     
@@ -871,20 +1206,18 @@ function model = build_simca_model(X, y, ncomp_vec, cl)
     
     for ic = 1:nClasses
         cl_ind = find(y == ic);
-        Xd1 = X(cl_ind, :);  % class samples
-        Xd2 = X;              % all samples
+        Xd1 = X(cl_ind, :);
+        Xd2 = X;
         
-        % Autoscaling based on class
         mx_c = mean(Xd1, 'omitnan');
         sx_c = std(Xd1, 0, 1, 'omitnan');
-        sx_c(sx_c == 0) = 1; % avoid division by zero
+        sx_c(sx_c == 0) = 1;
         
         model.PCmodels{ic}.prepr = {mx_c, sx_c};
         
         Xd1_sc = (Xd1 - mx_c) ./ sx_c;
         Xd2_sc = (Xd2 - mx_c) ./ sx_c;
         
-        % SVD for PCA
         nc = min(ncomp_vec(ic), min(size(Xd1_sc))-1);
         if nc < 1; nc = 1; end
         ncomp_vec(ic) = nc;
@@ -896,38 +1229,30 @@ function model = build_simca_model(X, y, ncomp_vec, cl)
         lambda_diag = diag(s).^2 / (size(Xd1,1) - 1);
         eigs_all = lambda_diag;
         
-        % Explained variance
         tot_var = sum(lambda_diag);
         ev = 100 * lambda_diag / tot_var;
         cv_var = cumsum(ev);
         
-        % Project all samples
         T1 = Xd2_sc * P_class;
         lambda_mat = diag(lambda_diag(1:nc));
         
-        % T² (Hotelling)
         tsq = diag(T1 * inv(lambda_mat) * T1');
         
-        % Q residuals
         Xd2_recon = T1 * P_class';
         E = Xd2_sc - Xd2_recon;
         q = sum(E.^2, 2);
         
-        % T² limit (F distribution)
         N_class = size(Xd1, 1);
         A = nc;
         try
             F_crit = finv(cl, A, N_class - A);
         catch
-            % Approximation if finv not available
-            % Wilson-Hilferty approximation for chi2inv
             z = sqrt(2) * erfinv(2*cl - 1);
             chi2_approx = A * (1 - 2/(9*A) + z*sqrt(2/(9*A)))^3;
             F_crit = chi2_approx / A;
         end
         t2lim = A * (N_class - 1) / (N_class - A) * F_crit;
         
-        % Q limit (Jackson-Mudholkar)
         if length(eigs_all) > nc
             theta1 = sum(eigs_all(nc+1:end));
             theta2 = sum(eigs_all(nc+1:end).^2);
@@ -947,7 +1272,6 @@ function model = build_simca_model(X, y, ncomp_vec, cl)
             qlim = theta1 * (1 + h1 + h2)^(1/h0);
         end
         
-        % Combined criterion: D = sqrt((T2/T2lim)^2 + (Q/Qlim)^2)
         cr_i = zeros(nsamp, 1);
         cl_acc = zeros(nsamp, 1);
         
@@ -987,7 +1311,6 @@ function model = build_simca_model(X, y, ncomp_vec, cl)
     model.SIMCA.nclass = nClasses;
     model.SIMCA.cl = cl;
     
-    % Assign predicted class = min criterion
     [~, final_cl] = min(model.SIMCA.crit, [], 2);
     model.SIMCA.predclass = final_cl;
 end
@@ -995,7 +1318,6 @@ end
 
 function pred = predict_simca(Xpred, ypred, simcamod)
 % Predict class membership using a trained SIMCA model
-
     nClasses = simcamod.SIMCA.nclass;
     ncomp = simcamod.SIMCA.ncomp;
     nspred = size(Xpred, 1);
@@ -1009,15 +1331,12 @@ function pred = predict_simca(Xpred, ypred, simcamod)
         P = simcamod.PCmodels{ic}.loads;
         eigs_all = simcamod.PCmodels{ic}.eigs;
         
-        % Preprocess
         Xp_sc = (Xpred - mx_c) ./ sx_c;
         
-        % Project
         nc = ncomp(ic);
         Tp = Xp_sc * P;
         lambda_mat = diag(eigs_all(1:nc));
         
-        % T² and Q
         tsq = diag(Tp * inv(lambda_mat) * Tp');
         E = Xp_sc - Tp * P';
         q = sum(E.^2, 2);
@@ -1069,10 +1388,6 @@ end
 
 function model = nipals_pls2(X, Y, ncomp)
 % NIPALS PLS2 algorithm
-% X: [N x p] predictor matrix (scaled)
-% Y: [N x q] response matrix (centered)
-% ncomp: number of latent variables
-
     [n, p] = size(X);
     [~, q] = size(Y);
     
@@ -1086,31 +1401,22 @@ function model = nipals_pls2(X, Y, ncomp)
     F = Y;
     
     for a = 1:ncomp
-        % Initialize u with first column of F
         [~, maxcol] = max(sum(F.^2));
         u = F(:, maxcol);
         
         for iter = 1:500
-            % X-weights
             w = E' * u;
             w = w / norm(w);
-            
-            % X-scores
             t = E * w;
-            
-            % Y-loadings
             qq = F' * t / (t' * t);
             
-            % If single Y column, don't iterate
             if q == 1
                 u = F * qq / (qq' * qq);
                 break;
             end
             
-            % Y-scores
             u_new = F * qq / (qq' * qq);
             
-            % Convergence check
             if norm(u_new - u) / (norm(u_new) + eps) < 1e-12
                 u = u_new;
                 break;
@@ -1118,20 +1424,15 @@ function model = nipals_pls2(X, Y, ncomp)
             u = u_new;
         end
         
-        % X-loadings
         pp = E' * t / (t' * t);
-        
-        % Inner relation
         b = u' * t / (t' * t);
         
-        % Store
         T(:, a) = t;
         P(:, a) = pp;
         W(:, a) = w;
         Q(:, a) = qq;
         bvec(a) = b;
         
-        % Deflate
         E = E - t * pp';
         F = F - b * t * qq';
     end
@@ -1141,8 +1442,6 @@ function model = nipals_pls2(X, Y, ncomp)
     model.W = W;
     model.Q = Q;
     model.B = bvec;
-    
-    % PLS regression coefficients: B_PLS = W*(P'W)^-1 * diag(b) * Q'
     model.Bpls = W * inv(P' * W) * diag(bvec) * Q';
 end
 
@@ -1155,7 +1454,6 @@ function VIP = compute_vip(plsmodel, X, Y)
     
     [p, ncomp] = size(W);
     
-    % Explained variance of Y by each component
     SS = zeros(ncomp, 1);
     for a = 1:ncomp
         b = plsmodel.B(a);
@@ -1193,7 +1491,7 @@ function dpow = compute_discriminant_power(X, y, simcamod)
     end
     
     dpow = sqrt(s2not ./ max(s2in, eps)) - 1;
-    dpow = max(dpow, 0); % clip negative values
+    dpow = max(dpow, 0);
 end
 
 
@@ -1232,16 +1530,15 @@ function plot_confusion_matrix(y_true, y_pred, classLabels, titleStr)
     colormap(flipud(bone));
     colorbar;
     
-    % Add text annotations with percentages
     total_per_row = sum(cm, 2);
     for i = 1:nClasses
         for j = 1:nClasses
             pct = 100 * cm(i,j) / max(total_per_row(i), 1);
             if cm(i,j) > 0
                 if i == j
-                    textColor = [0 0.5 0]; % green for correct
+                    textColor = [0 0.5 0];
                 else
-                    textColor = [0.8 0 0]; % red for errors
+                    textColor = [0.8 0 0];
                 end
                 text(j, i, sprintf('%d\n(%.0f%%)', cm(i,j), pct), ...
                     'HorizontalAlignment','center', 'FontSize', 9, ...
@@ -1258,7 +1555,6 @@ function plot_confusion_matrix(y_true, y_pred, classLabels, titleStr)
     xlabel('Predicted Class'); ylabel('True Class');
     title(titleStr);
     
-    % Overall accuracy
     acc = 100 * trace(cm) / sum(cm(:));
     text(0.5, nClasses + 0.6, sprintf('Accuracy: %.1f%%', acc), 'FontSize', 10, 'FontWeight', 'bold');
 end

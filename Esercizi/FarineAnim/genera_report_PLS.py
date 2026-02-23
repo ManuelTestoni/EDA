@@ -175,7 +175,7 @@ PLOT_DESCRIPTIONS = [
         di baseline, che colpiscono uniformemente l'intero spettro NIR.
         <br/><br/>
         In questo grafico si osserva la distribuzione dei campioni colorati per classe (pollo, bovino, pesce).
-        Se le classi non sono ben separate lungo PC1, ciò conferma che la prima componente è dominata da
+        Le classi non sono ben separate lungo PC1, ciò conferma che la prima componente è dominata da
         variazioni fisiche piuttosto che chimiche, e indica la necessità di un preprocessing spettrale
         (es. derivate, SNV, MSC) per rimuovere questi effetti prima di costruire il modello PLS."""
     ),
@@ -184,7 +184,7 @@ PLOT_DESCRIPTIONS = [
         "2. PCA Esplorativa — Loading Plot",
         """I loadings mostrano il contributo di ciascun wavenumber alle componenti principali.
         <br/><br/>
-        <b>Loading PC1 (blu):</b> Un profilo quasi piatto o monotono indica che PC1 cattura variazioni fisiche
+        <b>Loading PC1 (blu):</b> Un picco iniziale dopodichè un profilo abbastanza monotono, questo indica che PC1 cattura variazioni fisiche
         (scattering, baseline shift) che influenzano uniformemente lo spettro. Questo è coerente con il
         fatto che PC1 spiega una percentuale enorme della varianza.
         <br/><br/>
@@ -207,7 +207,8 @@ PLOT_DESCRIPTIONS = [
         <br/><br/>
         Campioni con T² alto e Q basso sono spiegati dal modello ma sono estremi; campioni con T² basso
         e Q alto non sono ben descritti; campioni con entrambi alti sono i più critici. Questa analisi
-        è fondamentale per decidere se escludere outlier prima di costruire il modello PLS."""
+        è fondamentale per decidere se escludere outlier prima di costruire il modello PLS.
+        Notiamo infatti che qualche campione che non viene ben catturato dal modello o risulta essere un outlier è presente."""
     ),
     (
         "04_spettri_originali.png",
@@ -242,10 +243,7 @@ PLOT_DESCRIPTIONS = [
         <b>SNV (Standard Normal Variate)</b> corregge gli effetti di scattering moltiplicativo e additivo
         tipici degli spettri NIR, normalizzando ciascuno spettro per la propria media e deviazione standard.
         Dopo SNV, il <b>Mean Centering</b> centra i dati sull'origine, facilitando la decomposizione PLS.
-        <br/><br/>
-        Se RMSEC continua a scendere mentre RMSECV si stabilizza o sale, siamo in presenza di overfitting:
-        il modello impara rumore dai dati di calibrazione senza migliorare la capacità predittiva.
-        La linea verticale tratteggiata indica il numero di LV selezionato."""
+        <br/><br/>"""
     ),
 
     # --- MODELLO PLS ---
@@ -273,7 +271,7 @@ PLOT_DESCRIPTIONS = [
         classi. A differenza della PCA, che massimizza la varianza di X, le LV del PLS massimizzano
         la covarianza tra X e Y, quindi la separazione tra classi dovrebbe essere migliore.
         <br/><br/>
-        Gruppi ben separati indicano che il modello ha trovato pattern spettrali discriminanti tra
+        Dal grafico notiamo gruppi abbastanza separati, questo indica che il modello ha trovato pattern spettrali discriminanti tra
         le categorie. La posizione relativa dei cluster fornisce informazioni sulla somiglianza
         tra classi: categorie vicine hanno profili spettrali simili."""
     ),
@@ -284,12 +282,9 @@ PLOT_DESCRIPTIONS = [
         i valori predetti dal modello, sia in <b>calibrazione (fit)</b> che in <b>cross-validation</b>.
         <br/><br/>
         <b>Pannello sinistro (Fit):</b> Mostra la capacità del modello di riprodurre i dati di training.
-        La linea verde è la diagonale perfetta (y=x), la linea rossa è la regressione effettiva.
-        Maggiore è la sovrapposizione tra le due linee, migliore è il fit.
         <br/><br/>
         <b>Pannello destro (CV):</b> Misura la capacità predittiva lasciando fuori campioni uno alla
-        volta (o a gruppi). Se il pattern è simile al fit, non c'è overfitting. Il valore R² in CV
-        è la metrica più affidabile per valutare la bontà predittiva."""
+        volta (o a gruppi)."""
     ),
     (
         "10_Y_vs_CV_residuals.png",
@@ -314,11 +309,8 @@ PLOT_DESCRIPTIONS = [
         <b>Leverage (asse x):</b> Misura quanto un campione influenza il modello. Campioni con leverage
         elevato hanno un peso sproporzionato nella costruzione del modello.
         <br/><br/>
-        <b>Residui Y (asse y):</b> Errore di predizione per quel campione.
-        <br/><br/>
-        Campioni con <i>alto leverage e alti residui</i> sono i più problematici: influenzano fortemente
-        il modello ma non sono predetti bene. Idealmente, i punti devono concentrarsi vicino all'origine
-        con residui entro la banda ±3σ."""
+       Notiamo esserci in questo caso alcuni campioni con leverage alto e altrettanto residui alti, questo significa che quei campioni influenzano molto il modello,
+       ma non saranno ben predetti."""
     ),
     (
         "12_inner_relations.png",
@@ -326,14 +318,10 @@ PLOT_DESCRIPTIONS = [
         """Le inner relations mostrano la relazione tra X-scores (T) e Y-scores (U) per ogni Latent
         Variable. Nel modello PLS, la relazione T→U deve essere lineare.
         <br/><br/>
-        • <b>Prime LV:</b> Mostrano tipicamente una struttura lineare forte (alto coefficiente di
-        correlazione r), indicando che catturano la maggior parte dell'informazione predittiva.
+        • <b>Prime LV:</b> Mostrano una struttura lineare forte, indicando che catturano la maggior parte dell'informazione predittiva.
         <br/>
         • <b>LV successive:</b> La struttura lineare si attenua, il contributo informativo diminuisce.
-        <br/><br/>
-        Se le ultime LV non mostrano relazione lineare, il loro contributo predittivo è minimo e si
-        potrebbe considerare un modello con meno LV. Questo grafico conferma la scelta del numero
-        di LV effettuata con lo scree plot."""
+        <br/><br/>"""
     ),
 
     # --- IMPORTANZA VARIABILI ---
@@ -355,32 +343,15 @@ PLOT_DESCRIPTIONS = [
     (
         "14_regression_coefficients.png",
         "14. Coefficienti di Regressione PLS",
-        """I coefficienti di regressione forniscono una visione sintetica di come ogni wavenumber
-        contribuisce alla predizione di ciascuna classe. Il profilo oscillante, con alternanza di
-        regioni positive e negative, è tipico dei modelli PLS su dati spettrali.
-        <br/><br/>
-        <b>Valori con modulo elevato</b> (picchi e valli) indicano le lunghezze d'onda dove le
-        variazioni dello spettro sono più fortemente correlate all'appartenenza a una specifica classe.
-        <br/><br/>
-        Nelle regioni NIR 4000-6000 cm⁻¹, i coefficienti di maggior modulo dovrebbero localizzarsi
+        """Nelle regioni NIR 4000-6000 cm⁻¹, i coefficienti di maggior modulo dovrebbero localizzarsi
         in corrispondenza delle bande di overtone <b>N-H</b> (proteine), <b>O-H</b> (acqua) e
         <b>C-H</b> (lipidi), che differenziano il contenuto nutritivo di pollo, bovino e pesce."""
     ),
     (
         "15_VIP_scores.png",
         "15. VIP Scores (Variable Importance in Projection)",
-        """Il VIP (Variable Importance in Projection) è una misura cumulativa dell'importanza di
-        ciascuna variabile nella proiezione PLS. La formula considera il peso di ogni variabile
-        in ogni LV, ponderato per la varianza di Y spiegata da quella LV.
-        <br/><br/>
-        <b>Soglia VIP = 1:</b> Variabili con VIP > 1 contribuiscono in media più della media alla
-        predizione di Y. Es. un valore VIP di 1.5 indica che quella variabile è 50% più importante
-        della media.
-        <br/><br/>
-        Le regioni con VIP elevato identificano le bande spettrali più informative per la
-        classificazione. Questo è particolarmente utile per l'interpretazione chimica: le bande
-        NIR con VIP > 1 corrispondono ai gruppi funzionali che differenziano le tre classi
-        di farine animali."""
+        """Le regioni con VIP elevato identificano le bande spettrali più informative per la
+        classificazione che in questo caso si collocano tra 4200-4300, 4900-4950, 5100-5300 e 5950-6000."""
     ),
     (
         "16_selectivity_ratio.png",
@@ -402,58 +373,16 @@ PLOT_DESCRIPTIONS = [
 
     # --- TEST SET ---
     (
-        "17_test_set_prediction.png",
+        None,
         "17. Validazione Test Set — Y Predetto vs Y Misurato",
-        """Questo è il grafico più importante dell'intera analisi: mostra la capacità del modello
-        di predire campioni <b>mai visti</b> durante la fase di calibrazione.
-        <br/><br/>
-        Per ciascuna classe, i punti devono distribuirsi lungo la diagonale (linea verde).
-        Il valore <b>RMSEP</b> (Root Mean Square Error of Prediction) quantifica l'errore medio
-        di predizione, mentre <b>R²</b> misura la quota di varianza spiegata nei dati di test.
-        <br/><br/>
-        <b>Interpretazione:</b>
-        <br/>
-        • RMSEP ≈ RMSECV → il modello generalizza bene (no overfitting)
-        <br/>
-        • RMSEP ≪ RMSECV → test set troppo "facile" o fortunato
-        <br/>
-        • RMSEP ≫ RMSECV → overfitting, il modello non generalizza
-        <br/><br/>
-        Valori di R² > 0.90 e bassa dispersione attorno alla diagonale indicano un modello
-        con eccellente capacità di generalizzazione."""
+        """Il modello presenta un valore di R^2 di circa 0.88 sul test set, indicando una buona capacità predittiva su campioni mai visti prima.
+        Il valore di RMSEP è simile a quello di RMSECV (0.32 vs 0.30), suggerendo che il modello generalizza bene senza overfitting."""
     ),
     (
         "18_confusion_matrix.png",
         "18. Confusion Matrix — Calibrazione e Test Set",
-        """La Confusion Matrix riassume le prestazioni di classificazione in formato tabellare.
-        Ogni riga rappresenta la classe vera, ogni colonna la classe predetta dal modello.
-        <br/><br/>
-        <b>Diagonale:</b> Campioni correttamente classificati. Idealmente, tutti i campioni
-        dovrebbero trovarsi sulla diagonale.
-        <br/><br/>
-        <b>Fuori diagonale:</b> Errori di classificazione (misclassificazioni). Indicano quali
-        classi il modello confonde più facilmente. Ad esempio, confusione tra bovino e pollo
-        potrebbe indicare profili proteici simili, mentre il pesce ha tipicamente un profilo
-        lipidico molto diverso.
-        <br/><br/>
-        L'accuratezza complessiva (percentuale di campioni correttamente classificati) è riportata
-        nel titolo di ciascun pannello. Un buon modello PLS-DA su dati NIR raggiunge tipicamente
-        accuratezze del 85-100%."""
-    ),
-    (
-        "19_spettri_preprocessati.png",
-        "19. Spettri Originali vs Preprocessati",
-        """Questo confronto visuale mostra l'effetto del preprocessing spettrale selezionato.
-        <br/><br/>
-        <b>Pannello sinistro (Originali):</b> Gli spettri grezzi mostrano ampia variabilità dovuta
-        a effetti fisici (scattering, dimensione particelle, baseline shift) che mascherano le
-        differenze chimiche.
-        <br/><br/>
-        <b>Pannello destro (Preprocessati):</b> Dopo il preprocessing, le variazioni fisiche
-        vengono ridotte/eliminate, esaltando le differenze chimiche tra le classi. La derivata
-        seconda rimuove offset e trend lineari, la MSC normalizza lo scattering, e il mean
-        centering centra i dati. Il risultato sono spettri dove le differenze tra pollo, bovino
-        e pesce sono più evidenti e interpretabili in termini di composizione chimica."""
+        """Da questa matrice possiamo osservare l'accuratezza del modello nel train set e nel test set.
+        Vediamo che vi è un solo elemento mal classificato (un campione di pesce predetto come pollo) nel test set, mentre in calibrazione tutti i campioni sono stati classificati correttamente. Questo conferma la buona performance del modello."""
     ),
 ]
 
@@ -520,7 +449,6 @@ def build_pdf():
         ["Metodo", "PLS-DA (Partial Least Squares Discriminant Analysis)"],
         ["Cross-Validation", "Venetian Blind (15 splits, thickness = 3)"],
         ["Software", "MATLAB + PLS Toolbox (Eigenvector Research Inc.)"],
-        ["Data generazione", datetime.now().strftime("%d/%m/%Y %H:%M")],
     ]
     info_table = Table(info_data, colWidths=[4.5 * cm, CONTENT_W - 5 * cm])
     info_table.setStyle(TableStyle([
@@ -580,6 +508,17 @@ def build_pdf():
     n_missing = 0
 
     for filename, title, description in PLOT_DESCRIPTIONS:
+        # Supporto sezioni senza immagine (filename=None)
+        if filename is None:
+            story.append(PageBreak())
+            story.append(Paragraph(title, style_section))
+            story.append(SectionDivider(CONTENT_W))
+            story.append(Spacer(1, 3 * mm))
+            story.append(Paragraph(description, style_body))
+            n_included += 1
+            print(f"  [OK]   {title} (solo testo)")
+            continue
+
         images = find_image(filename)
 
         if not images:
@@ -639,45 +578,8 @@ def build_pdf():
     L'analisi PLS-DA condotta sugli spettri NIR delle farine animali ha dimostrato l'efficacia della
     spettroscopia nel vicino infrarosso per la classificazione di campioni di diversa origine
     (pollo, bovino, pesce).
-    <br/><br/>
-    <b>Risultati principali:</b>
-    <br/><br/>
-    1. <b>PCA Esplorativa:</b> La dominanza di PC1 (varianza >99%) ha confermato la necessità di
-    preprocessing spettrale per rimuovere gli effetti fisici di scattering.
-    <br/><br/>
-    2. <b>Preprocessing:</b> Si è applicato il preprocessing <b>SNV + Mean Centering</b>. L'SNV corregge
-    gli effetti di scattering tipici degli spettri NIR, mentre il mean centering centra i dati sull'origine,
-    facilitando la decomposizione PLS e l'interpretazione dei risultati.
-    <br/><br/>
-    3. <b>Modello PLS:</b> La cross-validation con schema Venetian Blind (15 split, thickness 3)
-    ha garantito una stima robusta della capacità predittiva. L'analisi dei grafici diagnostici
-    (T² vs Q, leverage, residui) conferma la validità e stabilità del modello.
-    <br/><br/>
-    4. <b>Importanza Variabili:</b> VIP, Selectivity Ratio e coefficienti di regressione identificano
-    coerentemente le regioni spettrali legate alle bande di assorbimento N-H, O-H e C-H, in accordo
-    con la composizione chimica attesa (differenze in proteine, grassi e acqua tra le specie animali).
-    <br/><br/>
-    5. <b>Validazione:</b> La performance sul test set indipendente confermata dalla confusion matrix
-    dimostra che il modello generalizza adeguatamente a campioni non visti durante la calibrazione.
     """
     story.append(Paragraph(conclusion_text, style_body))
-
-    # ── Note metodologiche ─────────────────────────────────────────────
-    story.append(Spacer(1, 8 * mm))
-    story.append(Paragraph("Note Metodologiche", style_subsection))
-    story.append(SectionDivider(CONTENT_W, HexColor("#BBBBBB"), 0.5))
-
-    notes = [
-        "La divisione calibrazione/test è stata effettuata con campionamento stratificato (70/30) "
-        "per mantenere la proporzione delle classi.",
-        "La cross-validation Venetian Blind è stata scelta per garantire riproducibilità "
-        "(a differenza del random subset).",
-        "La matrice Y è codificata come dummy (one-hot) per adattare il problema di classificazione "
-        "alla regressione PLS (PLS-DA).",
-        "Il preprocessing Y consiste esclusivamente in mean centering.",
-    ]
-    for note in notes:
-        story.append(Paragraph(f"• {note}", style_note))
 
     # ── Genera PDF ─────────────────────────────────────────────────────
     doc.build(story)
